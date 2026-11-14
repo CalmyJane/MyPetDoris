@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#06080b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Doris">
+  <title>Doris</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- MAIN MENU: deliberately plain. Looks like a palm scanner, nothing more. -->
+  <section id="menu" class="screen active">
+    <canvas id="menu-bg"></canvas>
+    <header class="brand">
+      <div class="wordmark">doris</div>
+      <div class="tag">palm scanner</div>
+    </header>
+    <button id="btn-scan" class="scan-btn" aria-label="Scan">
+      <span class="ring"></span>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M17 26V12.5a2.5 2.5 0 0 1 5 0V24m0-13.5a2.5 2.5 0 0 1 5 0V24m0-11a2.5 2.5 0 0 1 5 0V25m0-8.5a2.5 2.5 0 0 1 5 0V30c0 7-5 12-11.5 12S15 38.5 12 34l-4.2-7a2.6 2.6 0 0 1 4.3-2.9L17 30"/></svg>
+      <span class="label">Scan</span>
+    </button>
+    <button id="btn-settings" class="icon-btn gear" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </section>
+
+  <!-- CAMERA: live view + hand-tracking skeleton -->
+  <section id="camera" class="screen">
+    <video id="cam-video" playsinline muted autoplay></video>
+    <canvas id="hud"></canvas>
+    <div class="cam-top">
+      <button id="btn-cam-back" class="icon-btn" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div id="cam-status" class="cam-status">INITIALIZING</div>
+      <button id="btn-flip" class="icon-btn" aria-label="Switch camera">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 15a8 8 0 0 1-14 3l-2-2M20 4v4h-4M4 20v-4h4"/></svg>
+      </button>
+    </div>
+    <div class="cam-bottom">
+      <label class="icon-btn" aria-label="Choose photo">
+        <input id="file-input" type="file" accept="image/*" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>
+      </label>
+      <button id="btn-shutter" class="shutter" aria-label="Capture"><span></span></button>
+      <span class="icon-btn spacer"></span>
+    </div>
+    <div id="flash"></div>
+  </section>
+
+  <!-- STAGE: the photo, full screen. No UI at all. Long-press to leave. -->
+  <section id="stage" class="screen">
+    <canvas id="photo"></canvas>
+    <canvas id="fx"></canvas>
+  </section>
+
+  <!-- SETTINGS SHEET -->
+  <div id="settings" class="sheet" aria-hidden="true">
+    <div class="sheet-panel">
+      <div class="sheet-head">
+        <h2>Settings</h2>
+        <button id="btn-settings-close" class="text-btn">Done</button>
+      </div>
+      <div id="settings-body" class="sheet-body"></div>
+      <div class="sheet-foot">
+        <button id="btn-preview" class="wide-btn">Preview</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
