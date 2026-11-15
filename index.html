@@ -28,6 +28,10 @@
       <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M17 26V12.5a2.5 2.5 0 0 1 5 0V24m0-13.5a2.5 2.5 0 0 1 5 0V24m0-11a2.5 2.5 0 0 1 5 0V25m0-8.5a2.5 2.5 0 0 1 5 0V30c0 7-5 12-11.5 12S15 38.5 12 34l-4.2-7a2.6 2.6 0 0 1 4.3-2.9L17 30"/></svg>
       <span class="label">Scan</span>
     </button>
+    <button id="btn-fs" class="icon-btn fs" aria-label="Full screen" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <div id="fs-hint" class="fs-hint" hidden>Share&nbsp;→ <b>Add to Home Screen</b>, then open it from there for full screen.</div>
     <button id="btn-settings" class="icon-btn gear" aria-label="Settings">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
@@ -52,8 +56,12 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>
       </label>
       <button id="btn-shutter" class="shutter" aria-label="Capture"><span></span></button>
-      <span class="icon-btn spacer"></span>
+      <button id="btn-torch" class="icon-btn" aria-label="Light" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8l-1 5H9zM9 7h6v3l-1.5 2v10h-3V12L9 10z"/><path class="beam" d="M12 15v2"/></svg>
+      </button>
+      <span id="torch-spacer" class="icon-btn spacer"></span>
     </div>
+    <button id="btn-zoom" class="zoom-chip" aria-label="Zoom">1.5×</button>
     <div id="flash"></div>
   </section>
 

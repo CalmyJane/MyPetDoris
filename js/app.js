@@ -21,6 +21,7 @@ const DEFAULTS = {
   appearances: 1,
   haptics: true,
   hud: true,
+  zoom: 1.5,
 };
 
 let settings = { ...DEFAULTS };
@@ -129,13 +130,25 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
 }
 
+// Already chrome-free when launched from the home screen (manifest display: fullscreen /
+// standalone). Calling requestFullscreen there anyway makes Android show its
+// "swipe to exit full screen" toast, so we never do.
+const isInstalled = () => ['fullscreen', 'standalone'].some((m) => matchMedia(`(display-mode: ${m})`).matches) || navigator.standalone === true;
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement) || isInstalled();
+const canFullscreen = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+
 function goFullscreen() {
   const el = document.documentElement;
-  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  if (isFullscreen() || !canFullscreen()) return;
   try {
     const p = (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el, { navigationUI: 'hide' });
     if (p && p.then) p.then(() => screen.orientation?.lock?.('portrait').catch(() => {})).catch(() => {});
   } catch {}
+}
+
+function updateFsButton() {
+  $('#btn-fs').hidden = isFullscreen();
+  if (isFullscreen()) $('#fs-hint').hidden = true;
 }
 
 let wakeLock = null;
@@ -187,13 +200,13 @@ function menuBackground() {
 // ---------------------------------------------------------------------------
 
 const cam = {
-  stream: null, facing: 'environment', raf: 0, hands: [], lastVideoTime: -1,
+  stream: null, facing: 'environment', raf: 0, hands: [], lastVideoTime: -1, dz: 1, torch: false, torchWanted: false,
   landmarker: null, hud: null,
 };
 
 async function openCamera() {
   showScreen('camera');
-  goFullscreen();
+  goFullscreen(); // usually already full screen from the menu tap; no-op then
   keepAwake(true);
   const status = $('#cam-status');
   status.textContent = 'INITIALIZING';
@@ -263,10 +276,59 @@ async function startStream() {
     audio: false,
   });
   v.srcObject = cam.stream;
-  const mirror = cam.facing === 'user';
-  v.classList.toggle('mirror', mirror);
-  $('#hud').classList.remove('mirror');
+  cam.torch = false;
   await v.play().catch(() => {});
+  await applyZoom();
+  setupTorch();
+}
+
+// Zoom: use the camera's optical/hardware zoom where the browser exposes it,
+// make up the rest with a centered digital crop (applied identically to the
+// live view, the hand-tracking overlay and the captured photo).
+async function applyZoom() {
+  const want = cam.facing === 'user' ? 1 : settings.zoom;
+  const track = cam.stream?.getVideoTracks()[0];
+  let hw = 1;
+  try {
+    const caps = track?.getCapabilities?.() || {};
+    if (caps.zoom) {
+      hw = Math.max(caps.zoom.min, Math.min(caps.zoom.max, want));
+      await track.applyConstraints({ advanced: [{ zoom: hw }] });
+      hw = track.getSettings().zoom || hw;
+    }
+  } catch { hw = 1; }
+  cam.dz = Math.max(1, want / hw);
+  const v = $('#cam-video');
+  v.style.transform = `scale(${cam.facing === 'user' ? -cam.dz : cam.dz}, ${cam.dz})`;
+  $('#btn-zoom').textContent = `${(+settings.zoom).toFixed(1).replace('.0', '')}×`;
+  $('#btn-zoom').hidden = cam.facing === 'user';
+}
+
+const ZOOM_STEPS = [1, 1.5, 2, 3];
+function setZoom(z) {
+  settings.zoom = Math.round(Math.max(1, Math.min(4, z)) * 10) / 10;
+  save();
+  applyZoom();
+}
+
+function setupTorch() {
+  const track = cam.stream?.getVideoTracks()[0];
+  let ok = false;
+  try { ok = !!track?.getCapabilities?.().torch; } catch {}
+  $('#btn-torch').hidden = !ok;
+  $('#torch-spacer').hidden = ok;
+  $('#btn-torch').classList.remove('on');
+  if (ok && cam.torchWanted) setTorch(true);
+}
+
+async function setTorch(on) {
+  const track = cam.stream?.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: on }] });
+    cam.torch = on;
+  } catch (e) { console.warn('torch', e); }
+  $('#btn-torch').classList.toggle('on', cam.torch);
 }
 
 function stopStream() {
@@ -283,7 +345,7 @@ function closeCamera() {
 // Map normalized landmarks (video space) into screen CSS px, honoring object-fit: cover.
 function coverMap(v) {
   const W = innerWidth, H = innerHeight, vw = v.videoWidth || W, vh = v.videoHeight || H;
-  const s = Math.max(W / vw, H / vh);
+  const s = Math.max(W / vw, H / vh) * (cam.dz || 1);
   return { s, ox: (W - vw * s) / 2, oy: (H - vh * s) / 2, vw, vh, W, H };
 }
 
@@ -305,13 +367,13 @@ function mapHands(res, v) {
 let hasPhoto = false;
 
 // Draw the visible (cover-cropped) part of a source into the stage photo canvas.
-function drawCover(src, sw, sh, mirror = false) {
+function drawCover(src, sw, sh, mirror = false, zoom = 1) {
   hasPhoto = true;
   const photo = $('#photo');
   const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
   photo.width = Math.round(W * dpr); photo.height = Math.round(H * dpr);
   const ctx = photo.getContext('2d');
-  const s = Math.max(W / sw, H / sh);
+  const s = Math.max(W / sw, H / sh) * zoom;
   const cw = W / s, ch = H / s;
   ctx.save();
   if (mirror) { ctx.translate(photo.width, 0); ctx.scale(-1, 1); }
@@ -322,7 +384,7 @@ function drawCover(src, sw, sh, mirror = false) {
 function capture() {
   const v = $('#cam-video');
   if (!cam.stream || v.readyState < 2) return;
-  drawCover(v, v.videoWidth, v.videoHeight, cam.facing === 'user');
+  drawCover(v, v.videoWidth, v.videoHeight, cam.facing === 'user', cam.dz || 1);
   const hand = cam.hud?.smooth?.[0];
   const palm = hand ? palmCenter(hand.pts) : null;
   const fl = $('#flash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
@@ -350,7 +412,6 @@ const stage = { runs: 0, busy: false, palm: null, timer: 0, preview: false, acti
 
 async function enterStage({ palm, preview = false }) {
   showScreen('stage');
-  goFullscreen();
   keepAwake(true);
   if (!show) show = new Show($('#fx'));
   show.resize();
@@ -469,6 +530,37 @@ $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings'
 $('#btn-preview').addEventListener('click', preview);
 $('#btn-cam-back').addEventListener('click', () => { closeCamera(); keepAwake(false); showScreen('menu'); });
 $('#btn-shutter').addEventListener('click', capture);
+$('#btn-torch').addEventListener('click', () => { cam.torchWanted = !cam.torch; setTorch(cam.torchWanted); });
+$('#btn-zoom').addEventListener('click', () => {
+  const i = ZOOM_STEPS.findIndex((z) => z > settings.zoom + 0.05);
+  setZoom(ZOOM_STEPS[i < 0 ? 0 : i]);
+});
+cameraPinch();
+
+// Pinch on the live view to zoom (remembered for next time).
+function cameraPinch() {
+  const el = $('#hud'), pts = new Map();
+  let d0 = 0, z0 = 1;
+  el.addEventListener('pointerdown', (e) => { pts.set(e.pointerId, e); if (pts.size === 2) { const [a, b] = [...pts.values()]; d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); z0 = settings.zoom; } });
+  el.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, e);
+    if (pts.size === 2 && d0 > 0) { const [a, b] = [...pts.values()]; setZoom(z0 * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / d0); }
+  });
+  const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) d0 = 0; };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+}
+
+// Full screen: any tap on the menu goes full screen (needs a user gesture), the
+// corner button is the explicit way. iPhone Safari can't do it at all outside an
+// installed home-screen app, so there the button explains that instead.
+$('#menu').addEventListener('pointerup', (e) => { if (!e.target.closest('#btn-fs')) goFullscreen(); });
+$('#btn-fs').addEventListener('click', () => {
+  if (canFullscreen()) goFullscreen();
+  else $('#fs-hint').hidden = !$('#fs-hint').hidden;
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) => document.addEventListener(ev, updateFsButton));
+updateFsButton();
 $('#btn-flip').addEventListener('click', async () => {
   cam.facing = cam.facing === 'environment' ? 'user' : 'environment';
   try { await startStream(); } catch (e) { console.warn(e); }
