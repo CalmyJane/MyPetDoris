@@ -724,11 +724,80 @@ export class Worm {
 }
 
 // ---------------------------------------------------------------------------
+// Rendered cockroach: a ray-traced, top-down walk cycle (tools/roach_blender.py)
+// played back as a sprite. The cycle advances with distance travelled, so the
+// planted feet stay put on the photo instead of sliding.
+// ---------------------------------------------------------------------------
+
+export const ROACH_SHEET = {
+  // values printed by the packing step in tools/README (frame size, body origin, px per body length)
+  frames: 16, cols: 4, fw: 536, fh: 362, ox: 186.46, oy: 180, ppl: 246.154, stride: 0.30,
+  img: (() => { const i = new Image(); i.decoding = 'async'; i.src = 'assets/roach.webp'; return i; })(),
+};
+
+export class RoachSprite {
+  constructor(L, seed = 11) {
+    this.L = L; this.kind = 'cockroach';
+    this.x = 0; this.y = 0; this.h = 0; this.speed = 0;
+    this.phase = rng(seed)(); this.prevPhase = this.phase;
+    this.onStep = null;
+    const S = ROACH_SHEET;
+    const corners = [[-S.ox, -S.oy], [S.fw - S.ox, -S.oy], [-S.ox, S.fh - S.oy], [S.fw - S.ox, S.fh - S.oy]];
+    this.reach = Math.max(...corners.map(([a, b]) => Math.hypot(a, b))) / S.ppl;
+    this.margin = this.reach;
+  }
+
+  place(x, y, h) { this.x = x; this.y = y; this.h = h; }
+  velocityFactor() { return 1; }
+
+  step(dt) {
+    const S = ROACH_SHEET;
+    const before = this.phase;
+    this.phase += (this.speed * dt) / (S.stride * this.L);
+    // a tripod touches down every half cycle
+    if (Math.floor(this.phase * 2) !== Math.floor(before * 2) && this.onStep) this.onStep();
+  }
+
+  bbox() {
+    const r = this.reach * this.L;
+    return [this.x - r, this.y - r, this.x + r, this.y + r];
+  }
+
+  _frame(ctx, phase, alpha) {
+    const S = ROACH_SHEET;
+    const f = ((Math.floor(phase * S.frames) % S.frames) + S.frames) % S.frames;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(S.img, (f % S.cols) * S.fw, Math.floor(f / S.cols) * S.fh, S.fw, S.fh, -S.ox, -S.oy, S.fw, S.fh);
+  }
+
+  draw(ctx) {
+    const S = ROACH_SHEET;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.h);
+    const k = this.L / S.ppl;
+    ctx.scale(k, k);
+    ctx.imageSmoothingQuality = 'high';
+    // Motion blur for the legs: when a display frame spans several cycle frames,
+    // layer the in-between poses faintly over the current one (the body is
+    // identical in every frame, so it stays crisp and opaque).
+    const span = (this.phase - this.prevPhase) * S.frames;
+    this._frame(ctx, this.phase, 1);
+    if (span > 1.2) {
+      const n = Math.min(3, Math.floor(span));
+      for (let i = 1; i <= n; i++) this._frame(ctx, this.phase - (span * i) / (n + 1) / S.frames, 0.38);
+    }
+    this.prevPhase = this.phase;
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 export const CREATURES = {
   cockroach: {
     label: 'Cockroach',
-    make: (L, seed) => new Cockroach(L, seed),
+    make: (L, seed) => (ROACH_SHEET.img.complete && ROACH_SHEET.img.naturalWidth ? new RoachSprite(L, seed) : new Cockroach(L, seed)),
     size: 0.36,          // body length as fraction of screen width
     motion: { run: 3.4, turn: 7.5, accel: 35, decel: 45, micro: 0.35, microDur: [0.08, 0.35], wiggle: 0.35, arrive: 0.35 },
     palmPause: [0.7, 0.5, 1.3],   // probability, min, max seconds
