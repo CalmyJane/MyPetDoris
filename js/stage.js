@@ -2,6 +2,7 @@
 // compositing with soft shadows, light matching and haptic footsteps.
 
 import { CREATURES, clamp, lerp, noise1, wrapAngle } from './creatures.js';
+import { drawFinger } from './finger.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -25,6 +26,7 @@ class Mover {
       if (Math.hypot(dx, dy) < p.arrive * L) {
         if (wp.pause) this.pause = wp.pause;
         this.i++;
+        if (wp.palm && this.onPalm) this.onPalm();
       }
       const desired = Math.atan2(dy, dx) + this.n(this.t * 1.3) * p.wiggle;
       const diff = wrapAngle(desired - c.h);
@@ -76,7 +78,7 @@ function planPath(W, H, L, margin, side, palm, pauseCfg) {
   const [pp, pmin, pmax] = pauseCfg;
   const wps = [
     via(start, P, 0.5, 0.12),
-    { x: P[0], y: P[1], pause: Math.random() < pp ? rand(pmin, pmax) : 0 },
+    { x: P[0], y: P[1], pause: Math.random() < pp ? rand(pmin, pmax) : 0, palm: true },
     via(P, exit, 0.5, 0.12),
     { x: exit[0], y: exit[1] },
   ];
@@ -122,6 +124,8 @@ export class Show {
   stop() {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
+    this.fingerAnim = null;
+    this.cur = null;
     if (this._resolve) { const r = this._resolve; this._resolve = null; r(); }
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.cv.width, this.cv.height);
@@ -139,6 +143,9 @@ export class Show {
     const path = planPath(W, H, L, margin, opts.side || 'random', opts.palm, def.palmPause);
     c.place(path.start[0], path.start[1], path.h);
     const mover = new Mover(c, path.wps, def.motion, opts.speed || 1);
+    this.cur = { c, mover, opts };
+    this.fingerAnim = null;
+    if (opts.finger && opts.finger.auto) mover.onPalm = () => this.scratch();
 
     let lastBuzz = 0;
     if (opts.haptics && navigator.vibrate) {
@@ -161,6 +168,7 @@ export class Show {
         // sub-step for stable gait at low frame rates
         const sub = Math.ceil(dt / 0.012);
         for (let k = 0; k < sub; k++) mover.update(dt / sub);
+        this._updateFinger(dt);
         this._render(c);
         const on = this._onScreen(c);
         if (on) entered = true;
@@ -173,6 +181,67 @@ export class Show {
       };
       this.raf = requestAnimationFrame(frame);
     });
+  }
+
+  /** Finger slides in from the bottom edge and scratches the creature's back. */
+  scratch() {
+    const cur = this.cur, fo = cur?.opts.finger;
+    if (!cur || !fo?.image || this.fingerAnim || cur.scratched) return false;
+    if (!this._onScreen(cur.c)) return false;
+    cur.scratched = true;
+    cur.mover.pause = 1e9; // hold still under the finger
+    this.fingerAnim = { t: 0, ang: 0, tip: null };
+    return true;
+  }
+
+  get scratching() { return !!this.fingerAnim; }
+
+  _updateFinger(dt) {
+    const fa = this.fingerAnim;
+    if (!fa) return;
+    const { c, mover } = this.cur;
+    const W = this.W, H = this.H, L = c.L;
+    const IN = 0.55, SCR = 1.6, OUT = 0.5;
+    fa.t += dt;
+    // base sits just past the bottom edge, centred: where the real finger enters
+    const base = [W * 0.5, H + 0.04 * H];
+    const tx = clamp(c.x, W * 0.12, W * 0.88), ty = clamp(c.y, H * 0.12, H * 0.92);
+    const ang = Math.atan2(ty - base[1], tx - base[0]);
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const dist = Math.hypot(tx - base[0], ty - base[1]);
+    const ease = (u) => 1 - (1 - u) ** 3;
+    let along; // distance of the tip from the base
+    let jig = 0;
+    if (fa.t < IN) along = dist * ease(fa.t / IN);
+    else if (fa.t < IN + SCR) {
+      const u = (fa.t - IN) / SCR;
+      along = dist - 0.16 * L * (0.5 - 0.5 * Math.cos(u * Math.PI * 2 * 3)) * Math.sin(u * Math.PI);
+      jig = Math.sin(u * 40) * 0.03 * Math.sin(u * Math.PI);
+    } else if (fa.t < IN + SCR + OUT) {
+      const u = (fa.t - IN - SCR) / OUT;
+      along = dist * (1 - u * u);
+      if (mover.pause > 1e8) { mover.pause = 0.12; mover.mul *= 1.5; } // spooked
+    } else { this.fingerAnim = null; return; }
+    c.h += jig * 0.5;
+    fa.ang = ang;
+    fa.tip = [base[0] + dx * along, base[1] + dy * along];
+    fa.reach = along + 0.08 * H;
+  }
+
+  _drawFinger() {
+    const fa = this.fingerAnim, fo = this.cur?.opts.finger;
+    if (!fa?.tip || !fo?.image) return;
+    const ctx = this.ctx, dpr = this.dpr;
+    const width = 0.21 * Math.min(this.W, this.H) * (fo.size || 1);
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.shadowColor = 'rgba(0,0,0,0.38)';
+    ctx.shadowBlur = width * 0.35 * dpr;
+    ctx.shadowOffsetX = width * 0.18 * dpr;
+    ctx.shadowOffsetY = width * 0.3 * dpr;
+    if (this.dark > 0 && 'filter' in ctx) ctx.filter = `brightness(${1 - this.dark * 0.8})`;
+    drawFinger(ctx, fo.image, fa.tip[0], fa.tip[1], fa.ang, width, fa.reach);
+    ctx.restore();
   }
 
   _onScreen(c) {
@@ -224,6 +293,7 @@ export class Show {
     ctx.shadowOffsetY = 0.014 * L * dpr;
     ctx.drawImage(this.buf, 0, 0, bw, bh, dx, dy, bw, bh);
     ctx.restore();
+    this._drawFinger();
   }
 }
 

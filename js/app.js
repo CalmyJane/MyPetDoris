@@ -2,6 +2,7 @@ import { Show, drawThumb } from './stage.js';
 import { Hud, loadHandLandmarker, palmCenter } from './handtrack.js';
 import { WaveDetector } from './wave.js';
 import { CREATURES } from './creatures.js';
+import { drawnFinger, capturedFinger, cutFinger } from './finger.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -22,6 +23,9 @@ const DEFAULTS = {
   haptics: true,
   hud: true,
   zoom: 1.5,
+  finger: 'tap',
+  fingerTone: 0.25,
+  fingerSize: 1,
 };
 
 let settings = { ...DEFAULTS };
@@ -44,6 +48,12 @@ const SCHEMA = [
   { key: 'side', label: 'Enters from', type: 'seg', options: [['random', 'Any'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']] },
   { key: 'size', label: 'Size', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: pct },
   { key: 'speed', label: 'Speed', type: 'range', min: 0.4, max: 2, step: 0.05, fmt: pct },
+  { key: 'finger', label: 'Finger scratch', type: 'seg', options: [['off', 'Off'], ['tap', 'On tap'], ['auto', 'Auto']],
+    note: (s) => s.finger === 'off' ? '' : (s.finger === 'tap' ? 'Tap while it is on screen:' : 'When it stops on the palm,') +
+      ' a finger slides in from the bottom edge and scratches its back. Slide your real finger in under the bottom of the phone at the same time.' },
+  { key: 'fingerImg', label: 'Finger look', type: 'finger', show: (s) => s.finger !== 'off' },
+  { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => s.finger !== 'off' && !myFinger },
+  { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: (s) => s.finger !== 'off' },
   { key: 'haptics', label: 'Footstep vibration', type: 'toggle' },
   { key: 'hud', label: 'Hand-tracking overlay', type: 'toggle' },
 ];
@@ -88,8 +98,21 @@ function buildSettings() {
       const r = document.createElement('input');
       r.type = 'range'; r.min = f.min; r.max = f.max; r.step = f.step; r.value = settings[f.key];
       val.textContent = f.fmt(settings[f.key]);
-      r.oninput = () => { settings[f.key] = +r.value; val.textContent = f.fmt(+r.value); save(); };
+      r.oninput = () => { settings[f.key] = +r.value; val.textContent = f.fmt(+r.value); save(); if (f.key === 'fingerTone') refresh(); };
       row.appendChild(r);
+    } else if (f.type === 'finger') {
+      const box = document.createElement('div');
+      box.className = 'finger-row';
+      const cv = document.createElement('canvas');
+      const bCap = document.createElement('button'); bCap.className = 'text-btn'; bCap.textContent = 'Use my finger';
+      const bReset = document.createElement('button'); bReset.className = 'text-btn'; bReset.textContent = 'Use drawn';
+      bCap.onclick = () => { closeSettings(); openCamera({ mode: 'finger' }); };
+      bReset.onclick = () => { myFinger = null; try { localStorage.removeItem('doris.finger'); } catch {} buildSettings(); };
+      box.append(cv, bCap);
+      if (myFinger) box.append(bReset);
+      row.appendChild(box);
+      val.textContent = myFinger ? 'yours' : 'drawn';
+      row._thumb = cv;
     } else if (f.type === 'toggle') {
       row.classList.add('inline');
       const t = document.createElement('button');
@@ -115,12 +138,48 @@ function buildSettings() {
         row.querySelectorAll('.seg button').forEach((b, i) => b.classList.toggle('on', f.options[i][0] === settings[f.key]));
       }
       if (f.note) row.querySelector('.note').textContent = f.note(settings);
+      if (row._thumb) fingerThumb(row._thumb);
     }
   }
 }
 
 function openSettings() { buildSettings(); $('#settings').classList.add('open'); $('#settings').setAttribute('aria-hidden', 'false'); }
 function closeSettings() { $('#settings').classList.remove('open'); $('#settings').setAttribute('aria-hidden', 'true'); }
+
+// ---------------------------------------------------------------------------
+// Finger
+// ---------------------------------------------------------------------------
+
+let myFinger = null; // captured finger image ({canvas,w,tip}) or null
+try {
+  const url = localStorage.getItem('doris.finger');
+  if (url) capturedFinger(url).then((f) => { myFinger = f; });
+} catch {}
+
+let drawnCache = { tone: -1, img: null };
+function fingerImage() {
+  if (myFinger) return myFinger;
+  if (drawnCache.tone !== settings.fingerTone) drawnCache = { tone: settings.fingerTone, img: drawnFinger(settings.fingerTone, 170) };
+  return drawnCache.img;
+}
+
+function fingerThumb(cv) {
+  const f = fingerImage();
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = 120, H = 54;
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  // lying sideways, tip to the right
+  const s = (H * 0.62) / f.w;
+  ctx.save();
+  ctx.translate(W - 6, H / 2);
+  ctx.rotate(Math.PI / 2);
+  ctx.scale(s, s);
+  ctx.translate(-f.tip[0], -f.tip[1]);
+  ctx.drawImage(f.canvas, 0, 0);
+  ctx.restore();
+}
 
 // ---------------------------------------------------------------------------
 // Screens / system helpers
@@ -204,7 +263,8 @@ const cam = {
   landmarker: null, hud: null,
 };
 
-async function openCamera() {
+async function openCamera({ mode = 'scan' } = {}) {
+  cam.mode = mode;
   showScreen('camera');
   goFullscreen(); // usually already full screen from the menu tap; no-op then
   keepAwake(true);
@@ -220,7 +280,7 @@ async function openCamera() {
   try {
     // Get any front-camera permission prompt out of the way now, while a prompt
     // looks natural, instead of on the photo screen when wave detection starts.
-    if (settings.trigger === 'wave') await warmFrontCamera();
+    if (settings.trigger === 'wave' && mode === 'scan') await warmFrontCamera();
     await startStream();
   } catch (e) {
     console.warn(e);
@@ -245,7 +305,10 @@ async function openCamera() {
     cam.hud.draw(now / 1000, settings.hud);
     if (cam.stream) {
       const locked = cam.hud.seen > 0.7;
-      status.textContent = !cam.landmarker ? 'LOADING MODEL' : locked ? 'PALM LOCKED' : hands.length ? 'TRACKING' : 'SCANNING';
+      status.textContent = cam.note && now < cam.noteUntil ? cam.note
+        : !cam.landmarker ? 'LOADING MODEL'
+        : cam.mode === 'finger' ? (locked ? 'FINGER LOCKED' : hands.length ? 'TRACKING' : 'SHOW INDEX FINGER')
+        : locked ? 'PALM LOCKED' : hands.length ? 'TRACKING' : 'SCANNING';
       status.classList.toggle('locked', locked);
       $('#btn-shutter').classList.toggle('locked', locked);
     }
@@ -381,9 +444,34 @@ function drawCover(src, sw, sh, mirror = false, zoom = 1) {
   ctx.restore();
 }
 
+// The current camera view exactly as on screen (cover crop, zoom, mirror), at device resolution.
+function screenFrame(v) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const ctx = cv.getContext('2d');
+  const s = Math.max(W / v.videoWidth, H / v.videoHeight) * (cam.dz || 1);
+  const cw = W / s, ch = H / s;
+  if (cam.facing === 'user') { ctx.translate(cv.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(v, (v.videoWidth - cw) / 2, (v.videoHeight - ch) / 2, cw, ch, 0, 0, cv.width, cv.height);
+  return { cv, dpr };
+}
+
+function captureFinger(v) {
+  const hand = cam.hud?.smooth?.[0];
+  if (!hand) { cam.note = 'NO HAND FOUND'; cam.noteUntil = performance.now() + 1500; return; }
+  const { cv, dpr } = screenFrame(v);
+  const url = cutFinger(cv, hand.pts.map((p) => [p[0] * dpr, p[1] * dpr]));
+  if (!url) return;
+  try { localStorage.setItem('doris.finger', url); } catch {}
+  closeCamera(); keepAwake(false); showScreen('menu');
+  capturedFinger(url).then((f) => { myFinger = f; openSettings(); });
+}
+
 function capture() {
   const v = $('#cam-video');
   if (!cam.stream || v.readyState < 2) return;
+  if (cam.mode === 'finger') { captureFinger(v); return; }
   drawCover(v, v.videoWidth, v.videoHeight, cam.facing === 'user', cam.dz || 1);
   const hand = cam.hud?.smooth?.[0];
   const palm = hand ? palmCenter(hand.pts) : null;
@@ -444,6 +532,7 @@ function fire() {
       side: settings.side,
       palm: stage.palm,
       haptics: settings.haptics,
+      finger: settings.finger === 'off' ? null : { image: fingerImage(), size: settings.fingerSize, auto: settings.finger === 'auto' },
     });
     if (token !== stage.token || !stage.active) return; // superseded or exited
     stage.busy = false;
@@ -481,6 +570,8 @@ function stageGestures() {
     clearTimeout(pressT); pressT = 0;
     if (moved || performance.now() - downAt > 400) return;
     const now = performance.now();
+    if (settings.finger !== 'off' && show?.scratch()) { lastTap = 0; return; }
+    if (show?.scratching) return;
     if (settings.trigger === 'tap') fire();
     else if (now - lastTap < 350) fire();
     lastTap = now;

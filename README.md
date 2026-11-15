@@ -25,7 +25,14 @@ faint gear icon at the bottom right.
 | Wave over the phone | Trigger (Wave mode; arms after the phone has lain still ~1 s) |
 | Double-tap | Backup trigger in Wave mode |
 | Single tap | Trigger in Tap mode |
+| Tap while the creature is visible | Finger slides in from the bottom edge and scratches its back (Finger scratch: On tap) |
 | Long-press (~1 s) | Exit to the menu |
+
+**Finger scratch:** slide your real finger in under the bottom-centre of the phone
+as the screen finger enters, so it looks like your finger continues onto the screen.
+Set it to *Auto* to have it happen when the creature stops on the palm. Under
+*Finger look → Use my finger*, photograph your own index finger (held straight);
+hand tracking cuts it out and it's used instead of the drawn one.
 
 ## Settings
 
