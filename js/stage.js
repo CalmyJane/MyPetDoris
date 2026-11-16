@@ -48,7 +48,7 @@ class Mover {
   }
 }
 
-function planPath(W, H, L, margin, side, palm, pauseCfg) {
+function planPath(W, H, L, margin, side, palm, pauseCfg, extraCfg) {
   if (side === 'random') {
     const r = Math.random();
     side = r < 0.36 ? 'left' : r < 0.72 ? 'right' : r < 0.86 ? 'top' : 'bottom';
@@ -82,6 +82,12 @@ function planPath(W, H, L, margin, side, palm, pauseCfg) {
     via(P, exit, 0.5, 0.12),
     { x: exit[0], y: exit[1] },
   ];
+  // optional second freeze at one of the on-screen bends (before or after the palm)
+  if (extraCfg && Math.random() < extraCfg[0]) {
+    const k = Math.random() < 0.5 ? 0 : 2;
+    const w = wps[k];
+    if (w.x > L * 0.4 && w.x < W - L * 0.4 && w.y > L * 0.4 && w.y < H - L * 0.4) w.pause = rand(extraCfg[1], extraCfg[2]);
+  }
   const h = Math.atan2(wps[0].y - start[1], wps[0].x - start[0]);
   return { start, h, wps };
 }
@@ -140,7 +146,7 @@ export class Show {
     const L = def.size * Math.min(W, H) * (opts.size || 1);
     const c = def.make(L, (Math.random() * 1e6) | 0);
     const margin = c.margin * L + 4;
-    const path = planPath(W, H, L, margin, opts.side || 'random', opts.palm, def.palmPause);
+    const path = planPath(W, H, L, margin, opts.side || 'random', opts.palm, def.palmPause, def.extraPause);
     c.place(path.start[0], path.start[1], path.h);
     const mover = new Mover(c, path.wps, def.motion, opts.speed || 1);
     this.cur = { c, mover, opts };

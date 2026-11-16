@@ -800,8 +800,9 @@ export const CREATURES = {
     label: 'Cockroach',
     make: (L, seed) => (ROACH_SHEET.img.complete && ROACH_SHEET.img.naturalWidth ? new RoachSprite(L, seed) : new Cockroach(L, seed)),
     size: 0.36,          // body length as fraction of screen width
-    motion: { run: 3.4, turn: 7.5, accel: 35, decel: 45, micro: 0.35, microDur: [0.08, 0.35], wiggle: 0.35, arrive: 0.35 },
-    palmPause: [0.7, 0.5, 1.3],   // probability, min, max seconds
+    motion: { run: 3.4, turn: 7.5, accel: 35, decel: 45, micro: 0.2, microDur: [0.08, 0.3], wiggle: 0.35, arrive: 0.35 },
+    palmPause: [1, 0.7, 1.6],     // probability, min, max seconds (freezes on the palm)
+    extraPause: [0.5, 0.45, 1.1], // chance of a second freeze on the way in or out
   },
   spider: {
     label: 'Spider',
