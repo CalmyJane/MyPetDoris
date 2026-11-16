@@ -17,8 +17,11 @@ function skin(tone, k = 1) {
   return (a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 }
 
-/** Drawn finger: returns { canvas, w (finger width px), tip:[x,y] }. */
-export function drawnFinger(tone = 0.25, w = 160) {
+/** Drawn finger: returns { canvas, w (finger width px), tip:[x,y] }.
+ *  side: 'pad' (palm side up, what you see when the finger slides in palm-up)
+ *  or 'nail' (back of the finger). */
+export function drawnFinger(tone = 0.25, w = 160, side = 'pad') {
+  if (side === 'pad') return padFinger(tone, w);
   const len = w * 6;
   const pad = w * 0.12;
   const cv = document.createElement('canvas');
@@ -112,6 +115,116 @@ export function drawnFinger(tone = 0.25, w = 160) {
   return { canvas: cv, w, tip: [cx, top] };
 }
 
+// Palm side of the finger: no nail, a lighter, pinker fleshy pad at the tip,
+// paired flexion creases at the joints and a faint fingerprint whorl.
+function padFinger(tone, w) {
+  const len = w * 6;
+  const pad = w * 0.12;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w + pad * 2); cv.height = Math.round(len + pad);
+  const ctx = cv.getContext('2d');
+  const cx = cv.width / 2, top = pad, r = w / 2;
+  // palm-side skin is lighter and pinker than the back of the hand
+  const base = LIGHT_SKIN.map((v, i) => lerp(v, DARK_SKIN[i], tone * 0.75));
+  const pink = [236, 160, 150];
+  const col = (k = 1, p = 0, a = 1) => {
+    const c = base.map((v, i) => lerp(v, pink[i] * (0.55 + 0.45 * (1 - tone)), p) * k);
+    return `rgba(${clamp(c[0], 0, 255) | 0},${clamp(c[1], 0, 255) | 0},${clamp(c[2], 0, 255) | 0},${a})`;
+  };
+
+  // outline: fleshy, slightly bulbous pad, narrowing a touch at the distal joint
+  const outline = () => {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.9, top + r * 0.95);
+    ctx.bezierCurveTo(cx - r * 0.9, top + r * 0.2, cx - r * 0.45, top, cx, top);
+    ctx.bezierCurveTo(cx + r * 0.45, top, cx + r * 0.9, top + r * 0.2, cx + r * 0.9, top + r * 0.95);
+    ctx.bezierCurveTo(cx + r * 0.98, top + w * 1.2, cx + r * 0.9, top + w * 1.6, cx + r * 0.92, top + w * 1.85);
+    ctx.bezierCurveTo(cx + r * 0.98, top + w * 2.6, cx + r * 0.96, top + w * 3.3, cx + r * 0.97, top + w * 3.6);
+    ctx.bezierCurveTo(cx + r * 1.03, top + w * 4.4, cx + r * 1.05, top + w * 5, cx + r * 1.06, top + len);
+    ctx.lineTo(cx - r * 1.06, top + len);
+    ctx.bezierCurveTo(cx - r * 1.05, top + w * 5, cx - r * 1.03, top + w * 4.4, cx - r * 0.97, top + w * 3.6);
+    ctx.bezierCurveTo(cx - r * 0.96, top + w * 3.3, cx - r * 0.98, top + w * 2.6, cx - r * 0.92, top + w * 1.85);
+    ctx.bezierCurveTo(cx - r * 0.9, top + w * 1.6, cx - r * 0.98, top + w * 1.2, cx - r * 0.9, top + r * 0.95);
+    ctx.closePath();
+  };
+
+  const g = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+  g.addColorStop(0, col(0.62, 0.55));
+  g.addColorStop(0.16, col(0.92, 0.38));
+  g.addColorStop(0.45, col(1.06, 0.26));
+  g.addColorStop(0.8, col(0.95, 0.32));
+  g.addColorStop(1, col(0.64, 0.55));
+  outline();
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  ctx.save();
+  outline();
+  ctx.clip();
+  // fleshy pads: each phalanx bulges, so it's lighter in its middle
+  for (const [y0, y1, a] of [[0, 1.85, 0.16], [1.85, 3.6, 0.1], [3.6, 6, 0.08]]) {
+    const yc = top + w * (y0 + y1) / 2;
+    const pg = ctx.createRadialGradient(cx - r * 0.12, yc - w * 0.1, 1, cx, yc, w * (y1 - y0) * 0.6);
+    pg.addColorStop(0, `rgba(255,236,226,${a})`);
+    pg.addColorStop(1, 'rgba(255,236,226,0)');
+    ctx.fillStyle = pg;
+    ctx.fillRect(0, top + w * y0 - w * 0.2, cv.width, w * (y1 - y0) + w * 0.4);
+  }
+  // pinker tip
+  const tg = ctx.createRadialGradient(cx, top + r * 0.9, 1, cx, top + r * 0.9, w * 0.95);
+  tg.addColorStop(0, col(1, 0.6, 0.35));
+  tg.addColorStop(1, col(1, 0.6, 0));
+  ctx.fillStyle = tg; ctx.fillRect(0, 0, cv.width, w * 2);
+  // faint fingerprint whorl
+  ctx.lineWidth = Math.max(0.6, w * 0.008);
+  for (let i = 1; i < 16; i++) {
+    ctx.strokeStyle = col(0.7, 0.3, 0.06);
+    ctx.beginPath();
+    ctx.ellipse(cx + w * 0.02, top + w * 0.72, w * 0.028 * i, w * 0.036 * i, 0.08, Math.PI * 0.95, Math.PI * 2.05);
+    ctx.stroke();
+  }
+  // flexion creases: paired lines at the distal joint, a double/triple at the middle
+  ctx.lineCap = 'round';
+  const crease = (y, a, bend) => {
+    ctx.strokeStyle = col(0.5, 0.5, a * 0.8);
+    ctx.lineWidth = w * (0.014 + Math.random() * 0.012);
+    // slightly wavy, broken line: real creases aren't ruled
+    const x0 = cx - r * (0.6 + Math.random() * 0.3), x1 = cx + r * (0.6 + Math.random() * 0.3);
+    ctx.beginPath();
+    for (let k = 0; k <= 12; k++) {
+      const u = k / 12, x = lerp(x0, x1, u);
+      const yy = y + bend * (1 - 4 * (u - 0.5) ** 2 * -1) * (1 - 2 * Math.abs(u - 0.5)) + (Math.random() - 0.5) * w * 0.015;
+      if (k === 0 || Math.random() < 0.08) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+    // soft highlight just below each crease (skin folds catch light)
+    ctx.strokeStyle = 'rgba(255,240,232,0.12)';
+    ctx.lineWidth = w * 0.03;
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.75, y + bend + w * 0.04);
+    ctx.quadraticCurveTo(cx, y - bend * 0.6 + w * 0.04, cx + r * 0.75, y + bend + w * 0.04);
+    ctx.stroke();
+  };
+  crease(top + w * 1.8, 0.5, w * 0.03);
+  crease(top + w * 1.9, 0.38, w * 0.02);
+  crease(top + w * 3.52, 0.5, -w * 0.02);
+  crease(top + w * 3.64, 0.42, -w * 0.01);
+  crease(top + w * 3.76, 0.25, w * 0.01);
+  // fine skin texture
+  for (let i = 0; i < w * 10; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,240,232,0.05)' : col(0.6, 0.3, 0.05);
+    ctx.fillRect(Math.random() * cv.width, Math.random() * cv.height, 1.4, 1.4);
+  }
+  // darker rim where the sides curve away
+  const eg = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+  eg.addColorStop(0, 'rgba(60,25,20,0.28)'); eg.addColorStop(0.1, 'rgba(60,25,20,0)');
+  eg.addColorStop(0.9, 'rgba(60,25,20,0)'); eg.addColorStop(1, 'rgba(60,25,20,0.28)');
+  ctx.fillStyle = eg; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.restore();
+
+  return { canvas: cv, w, tip: [cx, top] };
+}
+
 /**
  * Cut the index finger out of a screen-space frame using hand landmarks
  * (screen px). Returns a data URL of an upright finger, or null.
@@ -157,7 +270,58 @@ export function cutFinger(frame, pts) {
   }
   o.globalCompositeOperation = 'destination-in';
   o.drawImage(m, 0, 0);
+  skinKey(o, OW, OH, cx, top + r * 2, r);
   return out.toDataURL('image/png');
+}
+
+// Trim background left inside the capsule: pixels far in colour from the finger's
+// own skin (sampled down its centre line) fade out. Skipped if it would eat into
+// the finger itself (e.g. the background is skin coloured).
+function skinKey(o, W, H, cx, y0, r) {
+  let img;
+  try { img = o.getImageData(0, 0, W, H); } catch { return; }
+  const d = img.data;
+  const samples = [];
+  for (let y = Math.round(y0); y < H * 0.9; y += 3) {
+    for (let x = Math.round(cx - r * 0.3); x <= cx + r * 0.3; x += 3) {
+      const i = (y * W + x) * 4;
+      if (d[i + 3] > 200) samples.push([d[i], d[i + 1], d[i + 2]]);
+    }
+  }
+  if (samples.length < 20) return;
+  const med = [0, 1, 2].map((k) => samples.map((p) => p[k]).sort((a, b) => a - b)[samples.length >> 1]);
+  const spread = Math.max(18, Math.sqrt(samples.reduce((s, p) => s + (p[0] - med[0]) ** 2 + (p[1] - med[1]) ** 2 + (p[2] - med[2]) ** 2, 0) / samples.length));
+  const lm = med[0] * 0.3 + med[1] * 0.59 + med[2] * 0.11;
+  // chroma distance (ignores shading) plus a looser brightness term
+  const dist = (r0, g0, b0) => {
+    const l = r0 * 0.3 + g0 * 0.59 + b0 * 0.11;
+    const s = l > 1 ? lm / l : 1;
+    return Math.hypot(r0 * s - med[0], g0 * s - med[1], b0 * s - med[2]) + Math.abs(l - lm) * 0.25;
+  };
+  const a0 = spread * 1.6, a1 = spread * 3.2;
+  const alpha = new Float32Array(W * H);
+  let lostCore = 0, core = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, j = i * 4;
+      if (!d[j + 3]) continue;
+      const k = clamp(1 - (dist(d[j], d[j + 1], d[j + 2]) - a0) / (a1 - a0), 0, 1);
+      alpha[i] = k;
+      if (Math.abs(x - cx) < r * 0.5 && y > y0) { core++; if (k < 0.5) lostCore++; }
+    }
+  }
+  if (!core || lostCore / core > 0.12) return; // keying would damage the finger: keep the capsule
+  // soften: 3x3 box blur of the key so edges aren't jagged
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x, j = i * 4;
+      if (!d[j + 3]) continue;
+      let s = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += alpha[i + dy * W + dx];
+      d[j + 3] = d[j + 3] * (s / 9);
+    }
+  }
+  o.putImageData(img, 0, 0);
 }
 
 /** Load a captured finger data URL into the same {canvas,w,tip} shape. */

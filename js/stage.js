@@ -180,12 +180,6 @@ export class Show {
         if (on) entered = true;
         const timeout = now - started > 60000;
         const gone = entered && !on && mover.i >= mover.wps.length;
-        // "after" finger: once the creature has left, the fingertip peeks in as
-        // a cue, then slides on screen in step with the real finger under the phone
-        if (gone && !timeout && opts.finger?.mode === 'after' && !this.cur.afterDone) {
-          this.cur.afterDone = true;
-          this.fingerAnim = { mode: 'after', t: -0.4, tip: null };
-        }
         if ((gone && !this.fingerAnim) || timeout) {
           this.stop();
           return;
@@ -196,7 +190,33 @@ export class Show {
     });
   }
 
-  /** Finger slides in from the bottom edge and scratches the creature's back. */
+  /** The finger on its own: the fingertip peeks in at the edge as a cue, then
+   *  slides on screen in step with the performer's real finger under the phone.
+   *  opts: { image, size, from, cue, slide } */
+  playFinger(fo) {
+    this.stop();
+    this.resize();
+    if (!fo?.image) return Promise.resolve();
+    this.cur = { c: null, opts: { finger: fo } };
+    this.fingerAnim = { mode: 'after', t: 0, tip: null };
+    return new Promise((resolve) => {
+      this._resolve = resolve;
+      let last = performance.now();
+      const frame = (now) => {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        this._updateFinger(dt);
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.clearRect(0, 0, this.cv.width, this.cv.height);
+        if (!this.fingerAnim) { this.stop(); return; }
+        this._drawFinger();
+        this.raf = requestAnimationFrame(frame);
+      };
+      this.raf = requestAnimationFrame(frame);
+    });
+  }
+
+  /** Finger slides in from the edge and scratches the creature's back. */
   scratch() {
     const cur = this.cur, fo = cur?.opts.finger;
     if (!cur || !fo?.image || fo.mode === 'after' || this.fingerAnim || cur.scratched) return false;

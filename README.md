@@ -13,37 +13,44 @@ faint gear icon at the bottom right.
 1. **Scan** – rear camera opens with a live hand-tracking skeleton (pure show).
    Frame the spectator's palm and press the shutter.
 2. The photo now fills the screen with no UI. Place the phone on their palm.
-3. **Wave** your hand over the phone. After the set delay the creature walks in from
-   the side, crosses the palm (pausing on it if a palm was detected) and leaves.
-4. Wave again — nothing happens (1 appearance per photo by default).
-5. Put the phone on your own hand, have them wave… and they find the plastic bug.
+3. Run the **sequence** (Settings → Sequence). Default:
+   1. **Cockroach**, started by a wave over the phone. It walks in, crosses the
+      palm (pausing on it) and leaves.
+   2. **Finger**, 0.4 s after the roach has gone (see below).
+   After the last step nothing more happens: wave again and it doesn't come back.
+4. Put the phone on your own hand, have them wave… and they find the plastic bug.
+
+**Sequence:** a list of steps, each a creature (cockroach / spider / earthworm)
+or the finger. Each step has its own start signal: *Wave*, *Tap*, *2× tap*,
+*3× tap* or *Time* (seconds after the photo, or after the previous step ends).
+Add, remove and reorder steps; *Reset to default* restores the two above.
 
 **Hidden controls on the photo screen**
 
 | Gesture | Action |
 |---|---|
-| Wave over the phone | Trigger (Wave mode; arms after the phone has lain still ~1 s) |
-| Double-tap | Backup trigger in Wave mode |
-| Single tap | Trigger in Tap mode |
-| Tap while the creature is visible | Finger slides in and scratches its back (Finger: Scratch on tap) |
-| Long-press (~1 s) | Exit to the menu |
+| Wave over the phone | Starts a *Wave* step (arms after the phone has lain still ~1 s) |
+| 1 / 2 / 3 quick taps | Starts a *Tap* / *2× tap* / *3× tap* step (2 taps also back up a wave) |
+| 5 quick taps, or long-press (~1 s) | Exit to the menu |
+| Tap while the creature is visible | Finger scratches its back (*Finger scratches creature: On tap*) |
 
-**Finger (default: After):** once the creature has run off, a few pixels of
-fingertip peek in at the right screen edge (lower third) for about a second.
-That's your cue: slide your real finger in under the phone from that side at the
-same speed as the screen finger, which travels diagonally up into the screen, so it looks like you're seeing your finger
-through the phone. Cue length, slide time and entry point (left / right edge, bottom-left /
-bottom / bottom-right) are in Settings. The scratch modes instead have the finger scratch
-the creature's back (on tap, or automatically when it stops on the palm). Under
-*Finger look → Use my finger*, photograph your own index finger (held straight);
-hand tracking cuts it out and it's used instead of the drawn one.
+**Finger step:** a few pixels of fingertip peek in at the right screen edge (lower
+third) for about a second. That's your cue: slide your real finger in under the
+phone from that side, palm side up, at the same speed as the screen finger, which
+travels diagonally up into the screen, so it looks like you're seeing your finger
+through the phone. Cue length, slide time and entry point (left / right edge,
+bottom-left / bottom / bottom-right) are in Settings. The drawn finger shows the
+pad (palm side) by default, or the nail. For the most realistic result use
+*Finger look → Use my finger*: photograph your own index finger, held straight,
+palm side to the camera, against a plain non-skin background; hand tracking and a
+colour key cut it out and it replaces the drawn one.
 
 ## Settings
 
-Creature (cockroach / spider / earthworm), trigger (wave / tap / timer), wave
-sensitivity, timer, delay after trigger, appearances per photo, entry side, size,
-speed, footstep vibration (Android), hand-tracking overlay on/off. **Preview** plays
-the creature over the last photo (or a fake skin backdrop).
+Sequence, wave sensitivity, delay after wave / tap, creature entry side, size and
+speed, finger scratch, finger entry / timing / look / size, footstep vibration
+(Android), hand-tracking overlay on/off. **Preview** plays the whole sequence (each
+step half a second after the last) over the last photo, or a fake skin backdrop.
 
 ## How the creatures work
 

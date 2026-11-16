@@ -10,60 +10,67 @@ const $ = (s) => document.querySelector(s);
 // Settings
 // ---------------------------------------------------------------------------
 
+// The show is a list of steps. Each one waits for its start signal, then plays;
+// when the list is done nothing more happens.
+const DEFAULT_STEPS = [
+  { what: 'cockroach', on: 'wave', t: 3 },
+  { what: 'finger', on: 'time', t: 0.4 },
+];
+const STEP_WHAT = [['cockroach', 'Cockroach'], ['spider', 'Spider'], ['worm', 'Earthworm'], ['finger', 'Finger']];
+const STEP_ON = [['wave', 'Wave'], ['tap', 'Tap'], ['tap2', '2× tap'], ['tap3', '3× tap'], ['time', 'Time']];
+
 const DEFAULTS = {
-  creature: 'cockroach',
-  trigger: 'wave',
+  steps: DEFAULT_STEPS,
   sensitivity: 0.55,
-  timer: 6,
   delay: 0.4,
   side: 'random',
   size: 1,
   speed: 1,
-  appearances: 1,
   haptics: true,
   hud: true,
   zoom: 1.5,
-  fingerMode: 'after', // off | after | tap | auto
+  fingerScratch: 'off', // off | tap | auto: finger scratches a creature while it's on screen
   fingerEdge: 'r', // l | r | bl | b | br
   fingerCue: 1,
   fingerSlide: 0.9,
+  fingerSide: 'pad', // pad | nail (drawn finger)
   fingerTone: 0.25,
   fingerSize: 1,
 };
 
 let settings = { ...DEFAULTS };
 try { settings = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('doris.settings') || '{}') }; } catch {}
+const validStep = (st) => st && STEP_WHAT.some(([k]) => k === st.what) && STEP_ON.some(([k]) => k === st.on);
+settings.steps = (Array.isArray(settings.steps) && settings.steps !== DEFAULT_STEPS ? settings.steps.filter(validStep) : DEFAULT_STEPS)
+  .map((st) => ({ t: 3, ...st }));
+const hasStep = (s, f) => s.steps.some(f);
+const usesCreature = (s) => hasStep(s, (st) => st.what !== 'finger');
+const usesFinger = (s) => hasStep(s, (st) => st.what === 'finger') || (s.fingerScratch !== 'off' && usesCreature(s));
 const save = () => { try { localStorage.setItem('doris.settings', JSON.stringify(settings)); } catch {} };
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const SCHEMA = [
-  { key: 'creature', label: 'Creature', type: 'creature' },
-  { key: 'trigger', label: 'Trigger', type: 'seg', options: [['wave', 'Wave'], ['tap', 'Tap'], ['timer', 'Timer']],
-    note: (s) => ({
-      wave: 'Front camera watches for a hand passing over the phone. Arms once the phone has been lying still ~1 s. Double-tap also works as a backup.',
-      tap: 'Tap anywhere on the photo.',
-      timer: 'Appears automatically after the set time.',
-    })[s.trigger] },
-  { key: 'sensitivity', label: 'Wave sensitivity', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => s.trigger === 'wave' },
-  { key: 'timer', label: 'Timer', type: 'range', min: 2, max: 20, step: 1, fmt: (v) => `${v} s`, show: (s) => s.trigger === 'timer' },
-  { key: 'delay', label: 'Delay after trigger', type: 'range', min: 0, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s` },
-  { key: 'appearances', label: 'Appearances per photo', type: 'seg', options: [[1, '1'], [2, '2'], [3, '3']] },
-  { key: 'side', label: 'Enters from', type: 'seg', options: [['random', 'Any'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']] },
-  { key: 'size', label: 'Size', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: pct },
-  { key: 'speed', label: 'Speed', type: 'range', min: 0.4, max: 2, step: 0.05, fmt: pct },
-  { key: 'fingerMode', label: 'Finger', type: 'seg', options: [['off', 'Off'], ['after', 'After'], ['tap', 'Scratch on tap'], ['auto', 'Auto scratch']],
+  { key: 'steps', label: 'Sequence', type: 'steps',
+    note: () => 'Each step waits for its start signal, then plays. After the last step nothing more happens. Wave also accepts a double-tap as backup. Tap the photo 5× quickly to get back to the menu.' },
+  { key: 'sensitivity', label: 'Wave sensitivity', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => hasStep(s, (st) => st.on === 'wave') },
+  { key: 'delay', label: 'Delay after wave / tap', type: 'range', min: 0, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s` },
+  { key: 'side', label: 'Creature enters from', type: 'seg', options: [['random', 'Any'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']], show: usesCreature },
+  { key: 'size', label: 'Creature size', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: pct, show: usesCreature },
+  { key: 'speed', label: 'Creature speed', type: 'range', min: 0.4, max: 2, step: 0.05, fmt: pct, show: usesCreature },
+  { key: 'fingerScratch', label: 'Finger scratches creature', type: 'seg', options: [['off', 'Off'], ['tap', 'On tap'], ['auto', 'Auto']], show: usesCreature,
     note: (s) => ({
       off: '',
-      after: 'After it has run off, a fingertip peeks in at the edge for a moment: your cue. Then slide your real finger in under the phone; the on-screen finger slides in with it.',
       tap: 'Tap while it is on screen: a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
       auto: 'When it stops on the palm a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
-    })[s.fingerMode] },
-  { key: 'fingerEdge', label: 'Finger enters at', type: 'seg', options: [['l', 'Left'], ['r', 'Right'], ['bl', 'Bottom-L'], ['b', 'Bottom'], ['br', 'Bottom-R']], show: (s) => s.fingerMode !== 'off' },
-  { key: 'fingerCue', label: 'Fingertip cue', type: 'range', min: 0.3, max: 2.5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
-  { key: 'fingerSlide', label: 'Finger slide time', type: 'range', min: 0.4, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
-  { key: 'fingerImg', label: 'Finger look', type: 'finger', show: (s) => s.fingerMode !== 'off' },
-  { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => s.fingerMode !== 'off' && !myFinger },
-  { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: (s) => s.fingerMode !== 'off' },
+    })[s.fingerScratch] },
+  { key: 'fingerEdge', label: 'Finger enters at', type: 'seg', options: [['l', 'Left'], ['r', 'Right'], ['bl', 'Bottom-L'], ['b', 'Bottom'], ['br', 'Bottom-R']], show: usesFinger },
+  { key: 'fingerCue', label: 'Fingertip cue', type: 'range', min: 0.3, max: 2.5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => hasStep(s, (st) => st.what === 'finger') },
+  { key: 'fingerSlide', label: 'Finger slide time', type: 'range', min: 0.4, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => hasStep(s, (st) => st.what === 'finger') },
+  { key: 'fingerImg', label: 'Finger look', type: 'finger', show: usesFinger,
+    note: () => myFinger ? 'Using your photo. Retake it with Use my finger.' : 'Most realistic: Use my finger. Hold your index finger straight, palm side to the camera (the side that slides in), against a plain background that is not skin coloured.' },
+  { key: 'fingerSide', label: 'Finger shows', type: 'seg', options: [['pad', 'Pad (palm side)'], ['nail', 'Nail (back)']], show: (s) => usesFinger(s) && !myFinger },
+  { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => usesFinger(s) && !myFinger },
+  { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: usesFinger },
   { key: 'haptics', label: 'Footstep vibration', type: 'toggle' },
   { key: 'hud', label: 'Hand-tracking overlay', type: 'toggle' },
 ];
@@ -81,7 +88,20 @@ function buildSettings() {
     row.appendChild(head);
     const val = head.querySelector('.val');
 
-    if (f.type === 'creature') {
+    if (f.type === 'steps') {
+      const list = document.createElement('div');
+      list.className = 'steps';
+      row.appendChild(list);
+      row._steps = list;
+      const tools = document.createElement('div');
+      tools.className = 'step-foot';
+      const bAdd = document.createElement('button'); bAdd.className = 'text-btn'; bAdd.textContent = '+ Add step';
+      const bDef = document.createElement('button'); bDef.className = 'text-btn dim'; bDef.textContent = 'Reset to default';
+      bAdd.onclick = () => { settings.steps.push({ what: 'cockroach', on: 'wave', t: 3 }); save(); refresh(); };
+      bDef.onclick = () => { settings.steps = DEFAULT_STEPS.map((st) => ({ ...st })); save(); refresh(); };
+      tools.append(bAdd, bDef);
+      row.appendChild(tools);
+    } else if (f.type === 'creature') {
       const grid = document.createElement('div');
       grid.className = 'creatures';
       for (const [k, def] of Object.entries(CREATURES)) {
@@ -149,7 +169,60 @@ function buildSettings() {
       }
       if (f.note) row.querySelector('.note').textContent = f.note(settings);
       if (row._thumb) fingerThumb(row._thumb);
+      if (row._steps) renderSteps(row._steps);
     }
+  }
+
+  function renderSteps(list) {
+    list.innerHTML = '';
+    const steps = settings.steps;
+    if (!steps.length) {
+      const p = document.createElement('p'); p.className = 'note'; p.textContent = 'No steps: nothing will happen.';
+      list.appendChild(p);
+    }
+    const change = (fn) => { fn(); save(); refresh(); };
+    steps.forEach((st, i) => {
+      const card = document.createElement('div');
+      card.className = 'step';
+      const head = document.createElement('div');
+      head.className = 'step-head';
+      head.innerHTML = `<span class="step-n">${i + 1}</span><span class="step-title"></span><span class="step-tools"></span>`;
+      head.querySelector('.step-title').textContent = STEP_WHAT.find(([k]) => k === st.what)[1];
+      const tb = head.querySelector('.step-tools');
+      const tool = (label, aria, fn, off) => {
+        const b = document.createElement('button'); b.textContent = label; b.setAttribute('aria-label', aria);
+        b.disabled = !!off; b.onclick = () => change(fn); tb.appendChild(b);
+      };
+      tool('↑', 'Move up', () => steps.splice(i - 1, 0, steps.splice(i, 1)[0]), i === 0);
+      tool('↓', 'Move down', () => steps.splice(i + 1, 0, steps.splice(i, 1)[0]), i === steps.length - 1);
+      tool('✕', 'Remove step', () => steps.splice(i, 1));
+      card.appendChild(head);
+      const seg = (opts, key) => {
+        const el = document.createElement('div'); el.className = 'seg';
+        for (const [v, l] of opts) {
+          const b = document.createElement('button'); b.textContent = l;
+          b.classList.toggle('on', st[key] === v);
+          b.onclick = () => change(() => { st[key] = v; });
+          el.appendChild(b);
+        }
+        return el;
+      };
+      card.appendChild(seg(STEP_WHAT, 'what'));
+      const sub = document.createElement('div'); sub.className = 'step-sub'; sub.textContent = 'Starts on';
+      card.append(sub, seg(STEP_ON, 'on'));
+      if (st.on === 'time') {
+        const tr = document.createElement('div'); tr.className = 'step-time';
+        const lab = document.createElement('span');
+        const r = document.createElement('input');
+        r.type = 'range'; r.min = 0; r.max = 20; r.step = 0.1; r.value = st.t;
+        const txt = () => { lab.textContent = `${(+st.t).toFixed(1)} s after ${i === 0 ? 'the photo' : 'step ' + i + ' ends'}`; };
+        r.oninput = () => { st.t = +r.value; txt(); save(); };
+        txt();
+        tr.append(lab, r);
+        card.appendChild(tr);
+      }
+      list.appendChild(card);
+    });
   }
 }
 
@@ -166,10 +239,11 @@ try {
   if (url) capturedFinger(url).then((f) => { myFinger = f; });
 } catch {}
 
-let drawnCache = { tone: -1, img: null };
+let drawnCache = { key: '', img: null };
 function fingerImage() {
   if (myFinger) return myFinger;
-  if (drawnCache.tone !== settings.fingerTone) drawnCache = { tone: settings.fingerTone, img: drawnFinger(settings.fingerTone, 170) };
+  const key = settings.fingerTone + settings.fingerSide;
+  if (drawnCache.key !== key) drawnCache = { key, img: drawnFinger(settings.fingerTone, 170, settings.fingerSide) };
   return drawnCache.img;
 }
 
@@ -290,7 +364,7 @@ async function openCamera({ mode = 'scan' } = {}) {
   try {
     // Get any front-camera permission prompt out of the way now, while a prompt
     // looks natural, instead of on the photo screen when wave detection starts.
-    if (settings.trigger === 'wave' && mode === 'scan') await warmFrontCamera();
+    if (mode === 'scan' && settings.steps.some((st) => st.on === 'wave')) await warmFrontCamera();
     await startStream();
   } catch (e) {
     console.warn(e);
@@ -505,8 +579,16 @@ function loadFile(file) {
 // ---------------------------------------------------------------------------
 
 let show = null;
-const wave = new WaveDetector(() => fire());
-const stage = { runs: 0, busy: false, palm: null, timer: 0, preview: false, active: false };
+const wave = new WaveDetector(() => trigger('wave'));
+// idx: the step waiting to start next
+const stage = { idx: 0, busy: false, palm: null, timer: 0, preview: false, active: false };
+
+function fingerOpts(mode) {
+  return {
+    image: fingerImage(), size: settings.fingerSize, mode,
+    from: settings.fingerEdge, cue: settings.fingerCue, slide: settings.fingerSlide,
+  };
+}
 
 async function enterStage({ palm, preview = false }) {
   showScreen('stage');
@@ -514,45 +596,63 @@ async function enterStage({ palm, preview = false }) {
   if (!show) show = new Show($('#fx'));
   show.resize();
   show.setPhoto($('#photo'));
-  Object.assign(stage, { runs: 0, busy: false, palm, preview, active: true, token: (stage.token || 0) + 1 });
   clearTimeout(stage.timer);
-
-  if (preview) {
-    stage.timer = setTimeout(fire, 500);
-    return;
-  }
-  if (settings.trigger === 'timer') {
-    stage.timer = setTimeout(fire, settings.timer * 1000);
-  } else if (settings.trigger === 'wave') {
-    try { await wave.start(settings.sensitivity); }
-    catch (e) { console.warn('front camera unavailable, tap to trigger', e); }
-  }
+  Object.assign(stage, { idx: 0, busy: false, palm, preview, active: true, token: (stage.token || 0) + 1 });
+  armStep();
 }
 
-function fire() {
-  if (!stage.active || stage.busy || stage.runs >= settings.appearances) return;
+// Wait for the next step's start signal.
+async function armStep() {
+  clearTimeout(stage.timer);
+  const st = settings.steps[stage.idx];
+  if (!st) { wave.stop(); if (stage.preview) stage.timer = setTimeout(() => exitStage(true), 600); return; }
+  if (stage.preview || st.on === 'time') {
+    stage.timer = setTimeout(() => runStep(0), (stage.preview ? 0.5 : st.t) * 1000);
+    wave.stop();
+  } else if (st.on === 'wave') {
+    const token = stage.token;
+    try { await wave.start(settings.sensitivity); }
+    catch (e) { console.warn('front camera unavailable, double-tap to trigger', e); }
+    if (token !== stage.token || !stage.active || stage.busy) wave.stop();
+  } else wave.stop();
+}
+
+/** A user signal: 'wave' | 'tap1' | 'tap2' | 'tap3'. */
+function trigger(kind) {
+  if (!stage.active || stage.busy || stage.preview) return;
+  const st = settings.steps[stage.idx];
+  if (!st) return;
+  const ok = st.on === 'wave' ? kind === 'wave' || kind === 'tap2'
+    : st.on === 'tap' ? kind === 'tap1'
+    : st.on === 'tap2' ? kind === 'tap2'
+    : st.on === 'tap3' ? kind === 'tap3' : false;
+  if (ok) runStep(settings.delay);
+}
+
+function runStep(delay) {
+  const st = settings.steps[stage.idx];
+  if (!stage.active || stage.busy || !st) return;
   stage.busy = true;
-  stage.runs++;
+  wave.stop();
   const token = stage.token;
   stage.timer = setTimeout(async () => {
-    await show.play({
-      type: settings.creature,
-      size: settings.size,
-      speed: settings.speed,
-      side: settings.side,
-      palm: stage.palm,
-      haptics: settings.haptics,
-      finger: settings.fingerMode === 'off' ? null : {
-        image: fingerImage(), size: settings.fingerSize, mode: settings.fingerMode,
-        from: settings.fingerEdge, cue: settings.fingerCue, slide: settings.fingerSlide,
-      },
-    });
+    if (st.what === 'finger') await show.playFinger(fingerOpts('after'));
+    else {
+      await show.play({
+        type: st.what,
+        size: settings.size,
+        speed: settings.speed,
+        side: settings.side,
+        palm: stage.palm,
+        haptics: settings.haptics,
+        finger: settings.fingerScratch === 'off' ? null : fingerOpts(settings.fingerScratch),
+      });
+    }
     if (token !== stage.token || !stage.active) return; // superseded or exited
     stage.busy = false;
-    if (stage.preview) { exitStage(true); return; }
-    if (stage.runs >= settings.appearances) wave.stop(); // the creature "won't come back"
-    else if (settings.trigger === 'timer') stage.timer = setTimeout(fire, settings.timer * 1000);
-  }, stage.preview ? 0 : settings.delay * 1000);
+    stage.idx++;
+    armStep();
+  }, delay * 1000);
 }
 
 function exitStage(toSettings = false) {
@@ -566,10 +666,11 @@ function exitStage(toSettings = false) {
   if (toSettings) openSettings();
 }
 
-// Stage gestures: long-press = exit, tap = trigger (tap mode), double-tap = backup trigger.
+// Stage gestures: 5 quick taps or a long-press = exit; 1/2/3 quick taps are step
+// signals (2 taps also back up a wave).
 function stageGestures() {
   const el = $('#stage');
-  let pressT = 0, downAt = 0, lastTap = 0, moved = false, sx = 0, sy = 0;
+  let pressT = 0, downAt = 0, lastTap = 0, taps = 0, moved = false, sx = 0, sy = 0;
   el.addEventListener('pointerdown', (e) => {
     downAt = performance.now(); moved = false; sx = e.clientX; sy = e.clientY;
     clearTimeout(pressT);
@@ -583,11 +684,12 @@ function stageGestures() {
     clearTimeout(pressT); pressT = 0;
     if (moved || performance.now() - downAt > 400) return;
     const now = performance.now();
-    if ((settings.fingerMode === 'tap' || settings.fingerMode === 'auto') && show?.scratch()) { lastTap = 0; return; }
-    if (show?.scratching) return;
-    if (settings.trigger === 'tap') fire();
-    else if (now - lastTap < 350) fire();
+    taps = now - lastTap < 400 ? taps + 1 : 1;
     lastTap = now;
+    if (taps >= 5) { taps = 0; exitStage(stage.preview); return; }
+    if (settings.fingerScratch === 'tap' && show?.scratch()) return;
+    if (show?.scratching) return;
+    if (taps <= 3) trigger('tap' + taps);
   };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', () => { clearTimeout(pressT); pressT = 0; });
