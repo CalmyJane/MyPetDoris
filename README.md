@@ -29,11 +29,11 @@ faint gear icon at the bottom right.
 | Long-press (~1 s) | Exit to the menu |
 
 **Finger (default: After):** once the creature has run off, a few pixels of
-fingertip peek in at the bottom edge near the chosen corner for about a second.
+fingertip peek in at the right screen edge (lower third) for about a second.
 That's your cue: slide your real finger in under the phone from that side at the
-same speed as the screen finger, so it looks like you're seeing your finger
-through the phone. Cue length, slide time and entry point (bottom-left / bottom /
-bottom-right) are in Settings. The scratch modes instead have the finger scratch
+same speed as the screen finger, which travels diagonally up into the screen, so it looks like you're seeing your finger
+through the phone. Cue length, slide time and entry point (left / right edge, bottom-left /
+bottom / bottom-right) are in Settings. The scratch modes instead have the finger scratch
 the creature's back (on tap, or automatically when it stops on the palm). Under
 *Finger look → Use my finger*, photograph your own index finger (held straight);
 hand tracking cuts it out and it's used instead of the drawn one.

@@ -24,7 +24,7 @@ const DEFAULTS = {
   hud: true,
   zoom: 1.5,
   fingerMode: 'after', // off | after | tap | auto
-  fingerFrom: 'br',
+  fingerEdge: 'r', // l | r | bl | b | br
   fingerCue: 1,
   fingerSlide: 0.9,
   fingerTone: 0.25,
@@ -58,7 +58,7 @@ const SCHEMA = [
       tap: 'Tap while it is on screen: a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
       auto: 'When it stops on the palm a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
     })[s.fingerMode] },
-  { key: 'fingerFrom', label: 'Finger enters at', type: 'seg', options: [['bl', 'Bottom-left'], ['b', 'Bottom'], ['br', 'Bottom-right']], show: (s) => s.fingerMode !== 'off' },
+  { key: 'fingerEdge', label: 'Finger enters at', type: 'seg', options: [['l', 'Left'], ['r', 'Right'], ['bl', 'Bottom-L'], ['b', 'Bottom'], ['br', 'Bottom-R']], show: (s) => s.fingerMode !== 'off' },
   { key: 'fingerCue', label: 'Fingertip cue', type: 'range', min: 0.3, max: 2.5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
   { key: 'fingerSlide', label: 'Finger slide time', type: 'range', min: 0.4, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
   { key: 'fingerImg', label: 'Finger look', type: 'finger', show: (s) => s.fingerMode !== 'off' },
@@ -544,7 +544,7 @@ function fire() {
       haptics: settings.haptics,
       finger: settings.fingerMode === 'off' ? null : {
         image: fingerImage(), size: settings.fingerSize, mode: settings.fingerMode,
-        from: settings.fingerFrom, cue: settings.fingerCue, slide: settings.fingerSlide,
+        from: settings.fingerEdge, cue: settings.fingerCue, slide: settings.fingerSlide,
       },
     });
     if (token !== stage.token || !stage.active) return; // superseded or exited

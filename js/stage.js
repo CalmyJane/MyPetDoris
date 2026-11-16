@@ -216,10 +216,17 @@ export class Show {
   /** Where the real finger slides in under the phone: a point on the screen
    *  edge and the unit direction pointing into the screen. */
   _fingerEntry() {
-    const W = this.W, H = this.H, from = this.cur?.opts.finger?.from || 'br';
-    // near (not in) the corners: phone screens have rounded corners that would hide the cue
-    const E = from === 'bl' ? [W * 0.2, H] : from === 'b' ? [W * 0.5, H] : [W * 0.8, H];
-    const C = [W * 0.5, H * 0.45];
+    const W = this.W, H = this.H, from = this.cur?.opts.finger?.from || 'r';
+    let E, C;
+    if (from === 'r' || from === 'l') {
+      // side edge, lower third, heading diagonally up into the screen
+      E = from === 'r' ? [W, H * 0.68] : [0, H * 0.68];
+      C = from === 'r' ? [W * 0.3, H * 0.35] : [W * 0.7, H * 0.35];
+    } else {
+      // near (not in) the corners: phone screens have rounded corners that would hide the cue
+      E = from === 'bl' ? [W * 0.2, H] : from === 'b' ? [W * 0.5, H] : [W * 0.8, H];
+      C = [W * 0.5, H * 0.45];
+    }
     const dx = C[0] - E[0], dy = C[1] - E[1], d = Math.hypot(dx, dy) || 1;
     return { E, d: [dx / d, dy / d], toCentre: d };
   }
