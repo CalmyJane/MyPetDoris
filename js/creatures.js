@@ -724,14 +724,15 @@ export class Worm {
 }
 
 // ---------------------------------------------------------------------------
-// Rendered cockroach: a ray-traced, top-down walk cycle (tools/roach_blender.py)
-// played back as a sprite. The cycle advances with distance travelled, so the
-// planted feet stay put on the photo instead of sliding.
+// Rendered cockroach: a ray-traced, top-down walk cycle played back as a
+// sprite (tools/roach_model.py; model "Cockroach" by xcellf, CC BY 4.0). The
+// cycle advances with distance travelled, so the planted feet stay put on the
+// photo instead of sliding.
 // ---------------------------------------------------------------------------
 
 export const ROACH_SHEET = {
-  // values printed by the packing step in tools/README (frame size, body origin, px per body length)
-  frames: 16, cols: 4, fw: 536, fh: 362, ox: 186.46, oy: 180, ppl: 246.154, stride: 0.30,
+  // values printed by tools/pack_sprites.py (frame size, body origin, px per body length)
+  frames: 16, cols: 4, fw: 520, fh: 223, ox: 192.46, oy: 112, ppl: 246.154, stride: 0.4255,
   img: (() => { const i = new Image(); i.decoding = 'async'; i.src = 'assets/roach.webp'; return i; })(),
 };
 

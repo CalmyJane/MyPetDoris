@@ -46,10 +46,14 @@ the creature over the last photo (or a fake skin backdrop).
 No video files: each creature is drawn procedurally every frame so it really walks
 *over your photo*.
 
-- **Cockroach:** a ray-traced 3D model rendered in Blender as a 16-frame top-down
-  walk cycle (`assets/roach.webp`). The cycle advances with distance travelled so
-  planted feet don't slide, with leg motion blur at speed. Rebuild it with
-  `tools/roach_blender.py` (run inside Blender) and `tools/pack_sprites.py`.
+- **Cockroach:** a rigged, textured 3D model rendered in Blender (Cycles) as a
+  16-frame top-down walk cycle (`assets/roach.webp`). The cycle advances with
+  distance travelled so planted feet don't slide, with leg motion blur at speed.
+  Model: ["Cockroach"](https://sketchfab.com/3d-models/cockroach-cead55b8aa8643d48d67240bad028592)
+  by xcellf, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+  (antennae re-posed to lie flat). Rebuild with `tools/roach_model.py` (run inside
+  Blender, model unzipped in `tools/models/xcellf`) and `tools/pack_sprites.py`.
+  `tools/roach_blender.py` is the older fully procedural roach.
 - **Spider (and roach fallback):** feet are planted in world space and only lift during their
   swing phase (alternating tripod gait for the roach, alternating tetrapod for the
   spider), with IK-solved legs, so nothing slides. Darting/pausing behaviour, probing

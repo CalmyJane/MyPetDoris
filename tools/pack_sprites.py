@@ -1,10 +1,13 @@
 # Packs the walk-cycle frames rendered by roach_blender.py into assets/roach.webp
 # and prints the ROACH_SHEET values to paste into js/creatures.js.
-#   python tools/pack_sprites.py <frames_dir>
+#   python tools/pack_sprites.py <frames_dir> [stride]
+# stride: foot travel per cycle in body lengths (roach_model.py: 0.4255 =
+# 10 mm of the model's in-place walk / 23.5 mm body; roach_blender.py: 0.30)
 import glob, json, os, sys
 from PIL import Image
 
-RES, CAM_SCALE, CAM_CX, STRIDE = 640, 2.6, 0.12, 0.30  # keep in sync with roach_blender.py
+RES, CAM_SCALE, CAM_CX = 640, 2.6, 0.12  # keep in sync with the render scripts
+STRIDE = float(sys.argv[2]) if len(sys.argv) > 2 else 0.4255
 
 frames_dir = sys.argv[1]
 out = os.path.join(os.path.dirname(__file__), '..', 'assets', 'roach.webp')
