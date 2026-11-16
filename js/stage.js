@@ -6,6 +6,27 @@ import { drawFinger } from './finger.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
+/** Where the performer's real finger slides in under the phone, for a W x H
+ *  screen: entry point E on the edge, unit direction d into the screen, and
+ *  how far in the finger reaches (far). Also used by the camera's framing guide. */
+export function fingerPath(W, H, from = 'r') {
+  let E, C;
+  if (from === 'r' || from === 'l') {
+    // side edge, lower third, heading diagonally up into the screen
+    E = from === 'r' ? [W, H * 0.68] : [0, H * 0.68];
+    C = from === 'r' ? [W * 0.3, H * 0.35] : [W * 0.7, H * 0.35];
+  } else {
+    // near (not in) the corners: phone screens have rounded corners that would hide the cue
+    E = from === 'bl' ? [W * 0.2, H] : from === 'b' ? [W * 0.5, H] : [W * 0.8, H];
+    C = [W * 0.5, H * 0.45];
+  }
+  const dx = C[0] - E[0], dy = C[1] - E[1], d = Math.hypot(dx, dy) || 1;
+  return { E, d: [dx / d, dy / d], toCentre: d, far: d * 0.72 };
+}
+
+/** On-screen finger width for a W x H screen. */
+export const fingerWidth = (W, H, size = 1) => 0.21 * Math.min(W, H) * size;
+
 class Mover {
   constructor(c, wps, prof, speedMul) {
     this.c = c; this.wps = wps; this.p = prof; this.mul = speedMul;
@@ -230,25 +251,13 @@ export class Show {
   get scratching() { return !!this.fingerAnim; }
 
   _fingerWidth() {
-    return 0.21 * Math.min(this.W, this.H) * (this.cur?.opts.finger?.size || 1);
+    return fingerWidth(this.W, this.H, this.cur?.opts.finger?.size || 1);
   }
 
   /** Where the real finger slides in under the phone: a point on the screen
    *  edge and the unit direction pointing into the screen. */
   _fingerEntry() {
-    const W = this.W, H = this.H, from = this.cur?.opts.finger?.from || 'r';
-    let E, C;
-    if (from === 'r' || from === 'l') {
-      // side edge, lower third, heading diagonally up into the screen
-      E = from === 'r' ? [W, H * 0.68] : [0, H * 0.68];
-      C = from === 'r' ? [W * 0.3, H * 0.35] : [W * 0.7, H * 0.35];
-    } else {
-      // near (not in) the corners: phone screens have rounded corners that would hide the cue
-      E = from === 'bl' ? [W * 0.2, H] : from === 'b' ? [W * 0.5, H] : [W * 0.8, H];
-      C = [W * 0.5, H * 0.45];
-    }
-    const dx = C[0] - E[0], dy = C[1] - E[1], d = Math.hypot(dx, dy) || 1;
-    return { E, d: [dx / d, dy / d], toCentre: d };
+    return fingerPath(this.W, this.H, this.cur?.opts.finger?.from || 'r');
   }
 
   _updateAfterFinger(fa, dt) {
@@ -260,7 +269,7 @@ export class Show {
     const { E, d, toCentre } = this._fingerEntry();
     const w = this._fingerWidth();
     const peek = Math.max(5, w * 0.12);          // just a few pixels of fingertip
-    const far = toCentre * 0.72;                 // how far the finger reaches in
+    const far = toCentre * 0.72;                 // how far the finger reaches in (= fingerPath().far)
     const smooth = (u) => u * u * (3 - 2 * u);
     let s;
     if (t < CUE) s = peek * smooth(Math.min(1, t / 0.18));

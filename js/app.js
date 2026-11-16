@@ -1,8 +1,8 @@
-import { Show, drawThumb } from './stage.js';
+import { Show, drawThumb, fingerPath, fingerWidth } from './stage.js';
 import { Hud, loadHandLandmarker, palmCenter } from './handtrack.js';
 import { WaveDetector } from './wave.js';
 import { CREATURES } from './creatures.js';
-import { drawnFinger, capturedFinger, cutFinger } from './finger.js';
+import { drawnFinger, photoFinger, capturedFinger, cutFinger } from './finger.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -28,6 +28,7 @@ const DEFAULTS = {
   speed: 1,
   haptics: true,
   hud: true,
+  guide: true,
   zoom: 1.5,
   fingerScratch: 'off', // off | tap | auto: finger scratches a creature while it's on screen
   fingerEdge: 'r', // l | r | bl | b | br
@@ -67,12 +68,15 @@ const SCHEMA = [
   { key: 'fingerCue', label: 'Fingertip cue', type: 'range', min: 0.3, max: 2.5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => hasStep(s, (st) => st.what === 'finger') },
   { key: 'fingerSlide', label: 'Finger slide time', type: 'range', min: 0.4, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => hasStep(s, (st) => st.what === 'finger') },
   { key: 'fingerImg', label: 'Finger look', type: 'finger', show: usesFinger,
-    note: () => myFinger ? 'Using your photo. Retake it with Use my finger.' : 'Most realistic: Use my finger. Hold your index finger straight, palm side to the camera (the side that slides in), against a plain background that is not skin coloured.' },
-  { key: 'fingerSide', label: 'Finger shows', type: 'seg', options: [['pad', 'Pad (palm side)'], ['nail', 'Nail (back)']], show: (s) => usesFinger(s) && !myFinger },
+    note: () => myFinger ? 'Using your own finger photo.' : 'A real finger photo. Or use your own: hold your index finger straight inside the outline, palm side to the camera, against a plain background that is not skin coloured.' },
+  { key: 'fingerSide', label: 'Finger shows', type: 'seg', options: [['pad', 'Pad (palm side)'], ['nail', 'Nail (back)']], show: (s) => usesFinger(s) && !myFinger,
+    onChange: () => updatePhotoFinger() },
   { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => usesFinger(s) && !myFinger },
   { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: usesFinger },
   { key: 'haptics', label: 'Footstep vibration', type: 'toggle' },
   { key: 'hud', label: 'Hand-tracking overlay', type: 'toggle' },
+  { key: 'guide', label: 'Framing guide on camera', type: 'toggle',
+    note: () => 'Dashed outline of where the palm (and the screen finger) should sit, so the photo lines up with the real hand when the phone is laid on it.' },
 ];
 
 function buildSettings() {
@@ -120,7 +124,7 @@ function buildSettings() {
         const b = document.createElement('button');
         b.textContent = l;
         b.classList.toggle('on', settings[f.key] === v);
-        b.onclick = () => { settings[f.key] = v; save(); refresh(); };
+        b.onclick = () => { settings[f.key] = v; save(); refresh(); Promise.resolve(f.onChange?.()).then(refresh); };
         seg.appendChild(b);
       }
       row.appendChild(seg);
@@ -128,20 +132,20 @@ function buildSettings() {
       const r = document.createElement('input');
       r.type = 'range'; r.min = f.min; r.max = f.max; r.step = f.step; r.value = settings[f.key];
       val.textContent = f.fmt(settings[f.key]);
-      r.oninput = () => { settings[f.key] = +r.value; val.textContent = f.fmt(+r.value); save(); if (f.key === 'fingerTone') refresh(); };
+      r.oninput = () => { settings[f.key] = +r.value; val.textContent = f.fmt(+r.value); save(); if (f.key === 'fingerTone') { clearTimeout(toneT); toneT = setTimeout(() => updatePhotoFinger().then(refresh), 120); } };
       row.appendChild(r);
     } else if (f.type === 'finger') {
       const box = document.createElement('div');
       box.className = 'finger-row';
       const cv = document.createElement('canvas');
       const bCap = document.createElement('button'); bCap.className = 'text-btn'; bCap.textContent = 'Use my finger';
-      const bReset = document.createElement('button'); bReset.className = 'text-btn'; bReset.textContent = 'Use drawn';
+      const bReset = document.createElement('button'); bReset.className = 'text-btn'; bReset.textContent = 'Use stock photo';
       bCap.onclick = () => { closeSettings(); openCamera({ mode: 'finger' }); };
       bReset.onclick = () => { myFinger = null; try { localStorage.removeItem('doris.finger'); } catch {} buildSettings(); };
       box.append(cv, bCap);
       if (myFinger) box.append(bReset);
       row.appendChild(box);
-      val.textContent = myFinger ? 'yours' : 'drawn';
+      val.textContent = myFinger ? 'yours' : 'photo';
       row._thumb = cv;
     } else if (f.type === 'toggle') {
       row.classList.add('inline');
@@ -239,9 +243,20 @@ try {
   if (url) capturedFinger(url).then((f) => { myFinger = f; });
 } catch {}
 
+let toneT = 0;
+let stockFinger = null; // tinted stock photo finger for the current side/tone
+function updatePhotoFinger() {
+  const side = settings.fingerSide, tone = settings.fingerTone;
+  return photoFinger(side, tone).then((f) => {
+    if (side === settings.fingerSide && tone === settings.fingerTone) stockFinger = f;
+  });
+}
+updatePhotoFinger();
+
 let drawnCache = { key: '', img: null };
 function fingerImage() {
   if (myFinger) return myFinger;
+  if (stockFinger) return stockFinger;
   const key = settings.fingerTone + settings.fingerSide;
   if (drawnCache.key !== key) drawnCache = { key, img: drawnFinger(settings.fingerTone, 170, settings.fingerSide) };
   return drawnCache.img;
@@ -357,6 +372,7 @@ async function openCamera({ mode = 'scan' } = {}) {
   status.classList.remove('locked');
   if (!cam.hud) cam.hud = new Hud($('#hud'));
   cam.hud.resize();
+  drawGuide();
 
   // model loads in parallel with the camera
   loadHandLandmarker().then((lm) => { cam.landmarker = lm; }).catch((e) => console.warn('hand tracking unavailable', e));
@@ -391,13 +407,106 @@ async function openCamera({ mode = 'scan' } = {}) {
       const locked = cam.hud.seen > 0.7;
       status.textContent = cam.note && now < cam.noteUntil ? cam.note
         : !cam.landmarker ? 'LOADING MODEL'
-        : cam.mode === 'finger' ? (locked ? 'FINGER LOCKED' : hands.length ? 'TRACKING' : 'SHOW INDEX FINGER')
+        : cam.mode === 'finger' ? (locked ? 'FINGER LOCKED' : hands.length ? 'TRACKING' : 'FINGER IN OUTLINE')
         : locked ? 'PALM LOCKED' : hands.length ? 'TRACKING' : 'SCANNING';
       status.classList.toggle('locked', locked);
       $('#btn-shutter').classList.toggle('locked', locked);
     }
   };
   cam.raf = requestAnimationFrame(loop);
+}
+
+// Framing guide: a dashed palm outline filling the screen roughly as the real
+// palm will under a phone laid on it (finger bases near the top, heel near the
+// bottom), plus where the screen finger will end up. In finger-capture mode, an
+// upright finger outline instead.
+function drawGuide() {
+  const cv = $('#cam-guide'), ctx = cv.getContext('2d');
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (!settings.guide) return;
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([7, 6]);
+  ctx.lineJoin = ctx.lineCap = 'round';
+  const glow = (color) => { ctx.strokeStyle = color; ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4; };
+  const label = (t, x, y, align = 'center') => {
+    ctx.save(); ctx.setLineDash([]); ctx.shadowBlur = 4; ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = 'rgba(94,232,255,0.85)';
+    ctx.textAlign = align; ctx.fillText(t, x, y); ctx.restore();
+  };
+  // a finger: capsule with its tip at T, pointing along unit d, width w, reaching back `len`
+  const finger = (T, d, w, len) => {
+    const n = [-d[1], d[0]], r = w / 2, a = Math.atan2(d[1], d[0]);
+    const B = [T[0] - d[0] * len, T[1] - d[1] * len], C = [T[0] - d[0] * r, T[1] - d[1] * r];
+    ctx.beginPath();
+    ctx.moveTo(B[0] + n[0] * r, B[1] + n[1] * r);
+    ctx.lineTo(C[0] + n[0] * r, C[1] + n[1] * r);
+    ctx.arc(C[0], C[1], r, a + Math.PI / 2, a - Math.PI / 2, true);
+    ctx.lineTo(B[0] - n[0] * r, B[1] - n[1] * r);
+    ctx.stroke();
+  };
+
+  if (cam.mode === 'finger') {
+    const w = W * 0.2;
+    glow('rgba(94,232,255,0.75)');
+    finger([W / 2, H * 0.24], [0, -1], w, H);
+    label('INDEX FINGER · PALM SIDE', W / 2, H * 0.24 - 16);
+    return;
+  }
+
+  // palm: wider than the screen at the sides, finger bases ~22% down, heel ~86%
+  const m = Math.min(W, H);
+  const top = H * 0.22, heel = H * 0.86;
+  const L = W * 0.03, R = W * 0.97;
+  glow('rgba(94,232,255,0.7)');
+  ctx.beginPath();
+  ctx.moveTo(L + W * 0.03, H + 4);                                      // wrist, left
+  ctx.bezierCurveTo(L + W * 0.03, heel + H * 0.04, L - W * 0.01, heel, L, heel - H * 0.08);
+  ctx.bezierCurveTo(L - W * 0.02, H * 0.6, L, H * 0.4, L + W * 0.04, top + H * 0.03);
+  ctx.moveTo(R - W * 0.04, top + H * 0.03);
+  ctx.bezierCurveTo(R, H * 0.4, R + W * 0.02, H * 0.6, R, heel - H * 0.08);
+  ctx.bezierCurveTo(R + W * 0.01, heel, R - W * 0.03, heel + H * 0.04, R - W * 0.03, H + 4);
+  ctx.stroke();
+  // four fingers running off the top, joined by U-shaped webs
+  const span = (R - L) - W * 0.08, fw = span / 4, x0 = L + W * 0.04;
+  const base = [0.035, 0, 0.012, 0.06].map((v) => top + v * H);
+  ctx.beginPath();
+  ctx.moveTo(x0, top + H * 0.03);
+  ctx.lineTo(x0 + fw * 0.04, -4);
+  for (let i = 0; i < 3; i++) {
+    const xr = x0 + fw * (i + 0.94), xl = x0 + fw * (i + 1.06);
+    const wy = Math.max(base[i], base[i + 1]) + H * 0.012;
+    ctx.moveTo(xr, -4);
+    ctx.lineTo(xr, wy - fw * 0.1);
+    ctx.quadraticCurveTo((xr + xl) / 2, wy + fw * 0.08, xl, wy - fw * 0.1);
+    ctx.lineTo(xl, -4);
+  }
+  ctx.moveTo(x0 + fw * 3.96, -4);
+  ctx.lineTo(R - W * 0.04, top + H * 0.03);
+  ctx.stroke();
+  // heel crease line hint
+  ctx.beginPath();
+  ctx.moveTo(L + W * 0.12, heel - H * 0.02);
+  ctx.quadraticCurveTo(W / 2, heel + H * 0.02, R - W * 0.12, heel - H * 0.02);
+  ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
+  label('FINGERS', W / 2, top - 8);
+  label('PALM', W / 2, H * 0.55);
+  label('WRIST', W / 2, heel + H * 0.06);
+
+  // where the screen finger will come in and stop
+  if (usesFinger(settings)) {
+    const p = fingerPath(W, H, settings.fingerEdge);
+    const T = [p.E[0] + p.d[0] * p.far, p.E[1] + p.d[1] * p.far];
+    glow('rgba(255,210,120,0.75)');
+    ctx.setLineDash([4, 6]);
+    finger(T, p.d, fingerWidth(W, H, settings.fingerSize), p.far + m);
+    ctx.save(); ctx.setLineDash([]); ctx.shadowBlur = 4; ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = 'rgba(255,210,120,0.9)';
+    ctx.textAlign = 'center'; ctx.fillText('FINGER', T[0] + p.d[0] * -60, T[1] + p.d[1] * -60 - 4);
+    ctx.restore();
+  }
 }
 
 let frontWarmed = false;
@@ -784,7 +893,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-window.addEventListener('resize', () => { cam.hud?.resize(); });
+window.addEventListener('resize', () => { cam.hud?.resize(); if ($('#camera').classList.contains('active')) drawGuide(); });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

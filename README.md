@@ -11,7 +11,10 @@ faint gear icon at the bottom right.
 ## The routine
 
 1. **Scan** – rear camera opens with a live hand-tracking skeleton (pure show).
-   Frame the spectator's palm and press the shutter.
+   Line the spectator's palm up with the dashed **framing guide** (finger bases
+   near the top, heel of the hand near the bottom, palm a little wider than the
+   screen) and press the shutter. The guide also shows, in amber, where the
+   screen finger will end up. Turn it off under *Framing guide on camera*.
 2. The photo now fills the screen with no UI. Place the phone on their palm.
 3. Run the **sequence** (Settings → Sequence). Default:
    1. **Cockroach**, started by a wave over the phone. It walks in, crosses the
@@ -39,11 +42,14 @@ third) for about a second. That's your cue: slide your real finger in under the
 phone from that side, palm side up, at the same speed as the screen finger, which
 travels diagonally up into the screen, so it looks like you're seeing your finger
 through the phone. Cue length, slide time and entry point (left / right edge,
-bottom-left / bottom / bottom-right) are in Settings. The drawn finger shows the
-pad (palm side) by default, or the nail. For the most realistic result use
-*Finger look → Use my finger*: photograph your own index finger, held straight,
-palm side to the camera, against a plain non-skin background; hand tracking and a
-colour key cut it out and it replaces the drawn one.
+bottom-left / bottom / bottom-right) are in Settings. The finger is a real photo,
+palm side by default (*Finger shows → Nail* for the back), tinted with *Skin
+tone*: cut from ["Human-Hands-Front-Back.jpg"](https://commons.wikimedia.org/wiki/File:Human-Hands-Front-Back.jpg)
+by Evan-Amos, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)
+(`assets/finger_pad.webp` and `assets/finger_nail.webp` are under the same
+licence; rebuild with `tools/cut_finger.py`). Or use *Finger look → Use my
+finger*: photograph your own index finger inside the outline, palm side to the
+camera, against a plain non-skin background.
 
 ## Settings
 

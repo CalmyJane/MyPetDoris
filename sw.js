@@ -1,11 +1,11 @@
 // Offline support: app shell is cached on install; the hand-tracking model
 // and wasm (CDN) are cached the first time they load.
-const VERSION = 'doris-v9';
+const VERSION = 'doris-v10';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
   'js/app.js', 'js/stage.js', 'js/creatures.js', 'js/handtrack.js', 'js/wave.js', 'js/finger.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png',
-  'assets/roach.webp',
+  'assets/roach.webp', 'assets/finger_pad.webp', 'assets/finger_nail.webp',
 ];
 
 self.addEventListener('install', (e) => {

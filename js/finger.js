@@ -2,8 +2,11 @@
 // The performer slides their real finger in under the phone's bottom edge at
 // the same moment, so the screen finger reads as a continuation of it.
 //
-// A finger image always points UP (tip at the top). Two sources:
-//  - drawn: a shaded, nail-and-crease finger with adjustable skin tone
+// A finger image always points UP (tip at the top). Sources:
+//  - photo (default): a real index finger, palm or nail side, cut from
+//    "Human-Hands-Front-Back.jpg" by Evan-Amos (Wikimedia Commons, CC BY-SA 3.0)
+//    with tools/cut_finger.py; skin tone is adjusted with a multiply tint
+//  - drawn: fallback if the photo can't load
 //  - captured: a cut-out of the performer's own index finger, made from a
 //    camera frame using the hand-tracking landmarks.
 
@@ -15,6 +18,48 @@ const DARK_SKIN = [96, 60, 42];
 function skin(tone, k = 1) {
   const c = LIGHT_SKIN.map((v, i) => lerp(v, DARK_SKIN[i], tone) * k);
   return (a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+}
+
+// {w: finger width px, tip: [x,y], stretch: rows of plain skin the finger can be
+// lengthened in} for assets/finger_<side>.webp (printed by tools/cut_finger.py)
+const PHOTO = {
+  pad: { w: 157.5, tip: [109, 10], stretch: [455, 520] },
+  nail: { w: 150, tip: [105, 10], stretch: [310, 425] },
+};
+const photoCache = {};
+
+/** Real finger photo, tinted toward the chosen skin tone. Resolves null on failure. */
+export function photoFinger(side = 'pad', tone = 0.2) {
+  const m = PHOTO[side] || PHOTO.pad;
+  photoCache[side] ||= new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = `assets/finger_${side}.webp`;
+  });
+  return photoCache[side].then((img) => {
+    if (!img) return null;
+    const cv = document.createElement('canvas');
+    cv.width = img.width; cv.height = img.height;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    // the photo is light skin (about tone 0.2); darker tones multiply in a brown
+    const k = clamp((tone - 0.2) / 0.8, 0, 1);
+    if (k > 0) {
+      const c = [255, 255, 255].map((v, i) => lerp(v, [128, 84, 60][i], k));
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.drawImage(img, 0, 0);
+    } else if (tone < 0.2) {
+      const a = (0.2 - tone) / 0.2 * 0.25;
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = `rgba(255,240,230,${a})`;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+    }
+    return { canvas: cv, ...m };
+  });
 }
 
 /** Drawn finger: returns { canvas, w (finger width px), tip:[x,y] }.
@@ -351,6 +396,13 @@ export function drawFinger(ctx, f, x, y, ang, width, reach) {
   ctx.translate(-f.tip[0], -f.tip[1]);
   if (native >= reach) {
     ctx.drawImage(f.canvas, 0, 0);
+  } else if (f.stretch) {
+    // lengthen the finger inside a band of plain skin, keep the rest as is
+    const [a, b] = f.stretch;
+    const extra = reach / s - (H - f.tip[1]);
+    ctx.drawImage(f.canvas, 0, 0, W, a, 0, 0, W, a);
+    ctx.drawImage(f.canvas, 0, a, W, b - a, 0, a - 0.5, W, b - a + extra + 1);
+    ctx.drawImage(f.canvas, 0, b, W, H - b, 0, b + extra, W, H - b);
   } else {
     const keep = Math.round(H * 0.6);
     ctx.drawImage(f.canvas, 0, 0, W, keep, 0, 0, W, keep);
