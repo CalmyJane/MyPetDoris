@@ -151,7 +151,7 @@ export class Show {
     const mover = new Mover(c, path.wps, def.motion, opts.speed || 1);
     this.cur = { c, mover, opts };
     this.fingerAnim = null;
-    if (opts.finger && opts.finger.auto) mover.onPalm = () => this.scratch();
+    if (opts.finger?.mode === 'auto') mover.onPalm = () => this.scratch();
 
     let lastBuzz = 0;
     if (opts.haptics && navigator.vibrate) {
@@ -179,7 +179,14 @@ export class Show {
         const on = this._onScreen(c);
         if (on) entered = true;
         const timeout = now - started > 60000;
-        if ((entered && !on && mover.i >= mover.wps.length) || timeout) {
+        const gone = entered && !on && mover.i >= mover.wps.length;
+        // "after" finger: once the creature has left, the fingertip peeks in as
+        // a cue, then slides on screen in step with the real finger under the phone
+        if (gone && !timeout && opts.finger?.mode === 'after' && !this.cur.afterDone) {
+          this.cur.afterDone = true;
+          this.fingerAnim = { mode: 'after', t: -0.4, tip: null };
+        }
+        if ((gone && !this.fingerAnim) || timeout) {
           this.stop();
           return;
         }
@@ -192,7 +199,7 @@ export class Show {
   /** Finger slides in from the bottom edge and scratches the creature's back. */
   scratch() {
     const cur = this.cur, fo = cur?.opts.finger;
-    if (!cur || !fo?.image || this.fingerAnim || cur.scratched) return false;
+    if (!cur || !fo?.image || fo.mode === 'after' || this.fingerAnim || cur.scratched) return false;
     if (!this._onScreen(cur.c)) return false;
     cur.scratched = true;
     cur.mover.pause = 1e9; // hold still under the finger
@@ -202,15 +209,58 @@ export class Show {
 
   get scratching() { return !!this.fingerAnim; }
 
+  _fingerWidth() {
+    return 0.21 * Math.min(this.W, this.H) * (this.cur?.opts.finger?.size || 1);
+  }
+
+  /** Where the real finger slides in under the phone: a point on the screen
+   *  edge and the unit direction pointing into the screen. */
+  _fingerEntry() {
+    const W = this.W, H = this.H, from = this.cur?.opts.finger?.from || 'br';
+    // near (not in) the corners: phone screens have rounded corners that would hide the cue
+    const E = from === 'bl' ? [W * 0.2, H] : from === 'b' ? [W * 0.5, H] : [W * 0.8, H];
+    const C = [W * 0.5, H * 0.45];
+    const dx = C[0] - E[0], dy = C[1] - E[1], d = Math.hypot(dx, dy) || 1;
+    return { E, d: [dx / d, dy / d], toCentre: d };
+  }
+
+  _updateAfterFinger(fa, dt) {
+    const fo = this.cur.opts.finger;
+    const CUE = fo.cue ?? 1, SLIDE = fo.slide ?? 0.9, HOLD = 1.3, OUT = 0.7;
+    fa.t += dt;
+    const t = fa.t;
+    if (t < 0) { fa.tip = null; return; }
+    const { E, d, toCentre } = this._fingerEntry();
+    const w = this._fingerWidth();
+    const peek = Math.max(5, w * 0.12);          // just a few pixels of fingertip
+    const far = toCentre * 0.72;                 // how far the finger reaches in
+    const smooth = (u) => u * u * (3 - 2 * u);
+    let s;
+    if (t < CUE) s = peek * smooth(Math.min(1, t / 0.18));
+    else if (t < CUE + SLIDE) s = lerp(peek, far, smooth((t - CUE) / SLIDE));
+    else if (t < CUE + SLIDE + HOLD) {
+      const u = (t - CUE - SLIDE) / HOLD;
+      s = far + Math.sin(u * Math.PI * 2) * w * 0.05; // small natural drift
+    } else if (t < CUE + SLIDE + HOLD + OUT) {
+      const u = (t - CUE - SLIDE - HOLD) / OUT;
+      s = lerp(far, -w * 0.8, u * u);
+    } else { this.fingerAnim = null; return; }
+    fa.ang = Math.atan2(d[1], d[0]);
+    fa.tip = [E[0] + d[0] * s, E[1] + d[1] * s];
+    fa.reach = Math.max(0, s) + 0.15 * Math.max(this.W, this.H);
+  }
+
   _updateFinger(dt) {
     const fa = this.fingerAnim;
     if (!fa) return;
+    if (fa.mode === 'after') { this._updateAfterFinger(fa, dt); return; }
     const { c, mover } = this.cur;
     const W = this.W, H = this.H, L = c.L;
     const IN = 0.55, SCR = 1.6, OUT = 0.5;
     fa.t += dt;
-    // base sits just past the bottom edge, centred: where the real finger enters
-    const base = [W * 0.5, H + 0.04 * H];
+    // base sits just past the screen edge where the real finger enters
+    const en = this._fingerEntry();
+    const base = [en.E[0] - en.d[0] * 0.04 * H, en.E[1] - en.d[1] * 0.04 * H];
     const tx = clamp(c.x, W * 0.12, W * 0.88), ty = clamp(c.y, H * 0.12, H * 0.92);
     const ang = Math.atan2(ty - base[1], tx - base[0]);
     const dx = Math.cos(ang), dy = Math.sin(ang);
@@ -238,7 +288,7 @@ export class Show {
     const fa = this.fingerAnim, fo = this.cur?.opts.finger;
     if (!fa?.tip || !fo?.image) return;
     const ctx = this.ctx, dpr = this.dpr;
-    const width = 0.21 * Math.min(this.W, this.H) * (fo.size || 1);
+    const width = this._fingerWidth();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.shadowColor = 'rgba(0,0,0,0.38)';
@@ -263,7 +313,7 @@ export class Show {
     let [x0, y0, x1, y1] = c.bbox();
     x0 = Math.max(x0, -L * 0.2); y0 = Math.max(y0, -L * 0.2);
     x1 = Math.min(x1, this.W + L * 0.2); y1 = Math.min(y1, this.H + L * 0.2);
-    if (x1 <= x0 || y1 <= y0) return;
+    if (x1 <= x0 || y1 <= y0) { this._drawFinger(); return; }
     const bw = Math.ceil((x1 - x0) * dpr), bh = Math.ceil((y1 - y0) * dpr);
     if (this.buf.width < bw || this.buf.height < bh) {
       this.buf.width = Math.max(this.buf.width, bw);

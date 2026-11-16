@@ -23,7 +23,10 @@ const DEFAULTS = {
   haptics: true,
   hud: true,
   zoom: 1.5,
-  finger: 'tap',
+  fingerMode: 'after', // off | after | tap | auto
+  fingerFrom: 'br',
+  fingerCue: 1,
+  fingerSlide: 0.9,
   fingerTone: 0.25,
   fingerSize: 1,
 };
@@ -48,12 +51,19 @@ const SCHEMA = [
   { key: 'side', label: 'Enters from', type: 'seg', options: [['random', 'Any'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']] },
   { key: 'size', label: 'Size', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: pct },
   { key: 'speed', label: 'Speed', type: 'range', min: 0.4, max: 2, step: 0.05, fmt: pct },
-  { key: 'finger', label: 'Finger scratch', type: 'seg', options: [['off', 'Off'], ['tap', 'On tap'], ['auto', 'Auto']],
-    note: (s) => s.finger === 'off' ? '' : (s.finger === 'tap' ? 'Tap while it is on screen:' : 'When it stops on the palm,') +
-      ' a finger slides in from the bottom edge and scratches its back. Slide your real finger in under the bottom of the phone at the same time.' },
-  { key: 'fingerImg', label: 'Finger look', type: 'finger', show: (s) => s.finger !== 'off' },
-  { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => s.finger !== 'off' && !myFinger },
-  { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: (s) => s.finger !== 'off' },
+  { key: 'fingerMode', label: 'Finger', type: 'seg', options: [['off', 'Off'], ['after', 'After'], ['tap', 'Scratch on tap'], ['auto', 'Auto scratch']],
+    note: (s) => ({
+      off: '',
+      after: 'After it has run off, a fingertip peeks in at the edge for a moment: your cue. Then slide your real finger in under the phone; the on-screen finger slides in with it.',
+      tap: 'Tap while it is on screen: a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
+      auto: 'When it stops on the palm a finger slides in and scratches its back. Slide your real finger in under the phone at the same time.',
+    })[s.fingerMode] },
+  { key: 'fingerFrom', label: 'Finger enters at', type: 'seg', options: [['bl', 'Bottom-left'], ['b', 'Bottom'], ['br', 'Bottom-right']], show: (s) => s.fingerMode !== 'off' },
+  { key: 'fingerCue', label: 'Fingertip cue', type: 'range', min: 0.3, max: 2.5, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
+  { key: 'fingerSlide', label: 'Finger slide time', type: 'range', min: 0.4, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s`, show: (s) => s.fingerMode === 'after' },
+  { key: 'fingerImg', label: 'Finger look', type: 'finger', show: (s) => s.fingerMode !== 'off' },
+  { key: 'fingerTone', label: 'Skin tone', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => s.fingerMode !== 'off' && !myFinger },
+  { key: 'fingerSize', label: 'Finger size', type: 'range', min: 0.6, max: 1.6, step: 0.05, fmt: pct, show: (s) => s.fingerMode !== 'off' },
   { key: 'haptics', label: 'Footstep vibration', type: 'toggle' },
   { key: 'hud', label: 'Hand-tracking overlay', type: 'toggle' },
 ];
@@ -532,7 +542,10 @@ function fire() {
       side: settings.side,
       palm: stage.palm,
       haptics: settings.haptics,
-      finger: settings.finger === 'off' ? null : { image: fingerImage(), size: settings.fingerSize, auto: settings.finger === 'auto' },
+      finger: settings.fingerMode === 'off' ? null : {
+        image: fingerImage(), size: settings.fingerSize, mode: settings.fingerMode,
+        from: settings.fingerFrom, cue: settings.fingerCue, slide: settings.fingerSlide,
+      },
     });
     if (token !== stage.token || !stage.active) return; // superseded or exited
     stage.busy = false;
@@ -570,7 +583,7 @@ function stageGestures() {
     clearTimeout(pressT); pressT = 0;
     if (moved || performance.now() - downAt > 400) return;
     const now = performance.now();
-    if (settings.finger !== 'off' && show?.scratch()) { lastTap = 0; return; }
+    if ((settings.fingerMode === 'tap' || settings.fingerMode === 'auto') && show?.scratch()) { lastTap = 0; return; }
     if (show?.scratching) return;
     if (settings.trigger === 'tap') fire();
     else if (now - lastTap < 350) fire();
