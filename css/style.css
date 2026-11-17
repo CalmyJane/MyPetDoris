@@ -97,7 +97,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 #btn-torch.on { background: rgba(255, 230, 140, 0.9); color: #222; }
 .zoom-chip {
   position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: calc(122px + var(--safe-b));
+  bottom: calc(214px + var(--safe-b));
   min-width: 44px; height: 30px; padding: 0 10px; border-radius: 15px;
   font: 600 12px/30px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color: #ffe58a; background: rgba(0, 0, 0, 0.45);
@@ -128,8 +128,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .cam-status.locked { color: #8dffb5; border-color: rgba(141, 255, 181, 0.5); text-shadow: 0 0 8px rgba(141, 255, 181, 0.7); }
 
+/* raised so Android's "swipe to exit full screen" toast (bottom centre, ~2 s
+   after going full screen) doesn't cover the shutter */
 .cam-bottom {
-  position: absolute; left: 0; right: 0; bottom: calc(26px + var(--safe-b));
+  position: absolute; left: 0; right: 0; bottom: calc(118px + var(--safe-b));
   display: flex; align-items: center; justify-content: space-around;
 }
 .shutter {

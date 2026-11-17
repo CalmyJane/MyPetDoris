@@ -24,6 +24,7 @@ const DEFAULTS = {
   sensitivity: 0.55,
   delay: 0.4,
   side: 'random',
+  view: 'spectator', // spectator | performer: whose "up" the palm guide and creature sides use
   size: 1,
   speed: 1,
   haptics: true,
@@ -55,6 +56,10 @@ const SCHEMA = [
     note: () => 'Each step waits for its start signal, then plays. After the last step nothing more happens. Wave also accepts a double-tap as backup. Tap the photo 5× quickly to get back to the menu.' },
   { key: 'sensitivity', label: 'Wave sensitivity', type: 'range', min: 0, max: 1, step: 0.05, fmt: pct, show: (s) => hasStep(s, (st) => st.on === 'wave') },
   { key: 'delay', label: 'Delay after wave / tap', type: 'range', min: 0, max: 2, step: 0.1, fmt: (v) => `${(+v).toFixed(1)} s` },
+  { key: 'view', label: 'Orientation', type: 'seg', options: [['spectator', "Spectator's view"], ['performer', "Performer's view"]],
+    note: (s) => s.view === 'spectator'
+      ? 'The phone is turned round to face the spectator: the palm guide is upside down for you (their fingers point at you), and creature sides (Left / Top…) are as the spectator sees them.'
+      : 'Palm guide and creature sides as you, the photographer, see the screen.' },
   { key: 'side', label: 'Creature enters from', type: 'seg', options: [['random', 'Any'], ['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']], show: usesCreature },
   { key: 'size', label: 'Creature size', type: 'range', min: 0.5, max: 1.6, step: 0.05, fmt: pct, show: usesCreature },
   { key: 'speed', label: 'Creature speed', type: 'range', min: 0.4, max: 2, step: 0.05, fmt: pct, show: usesCreature },
@@ -456,8 +461,12 @@ function drawGuide() {
     return;
   }
 
-  // palm: wider than the screen at the sides, finger bases ~22% down, heel ~86%
+  // palm: wider than the screen at the sides, finger bases ~22% down, heel ~86%.
+  // Spectator's view: turned 180 degrees (their fingers toward the photographer).
   const m = Math.min(W, H);
+  const flip = settings.view !== 'performer';
+  ctx.save();
+  if (flip) { ctx.translate(W, H); ctx.rotate(Math.PI); }
   const top = H * 0.22, heel = H * 0.86;
   const L = W * 0.03, R = W * 0.97;
   glow('rgba(94,232,255,0.7)');
@@ -491,9 +500,12 @@ function drawGuide() {
   ctx.moveTo(L + W * 0.12, heel - H * 0.02);
   ctx.quadraticCurveTo(W / 2, heel + H * 0.02, R - W * 0.12, heel - H * 0.02);
   ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
-  label('FINGERS', W / 2, top - 8);
-  label('PALM', W / 2, H * 0.55);
-  label('WRIST', W / 2, heel + H * 0.06);
+  ctx.restore();
+  // labels stay upright for the photographer
+  const lab = (t, y, dy) => label(t, W / 2, flip ? H - y + dy : y);
+  if (flip) label('FINGERS', W * 0.2, H - top - 34); else lab('FINGERS', top - 8, 0);
+  lab('PALM', H * 0.55, 0);
+  lab('WRIST', heel + H * 0.06, 0);
 
   // where the screen finger will come in and stop
   if (usesFinger(settings)) {
@@ -751,7 +763,9 @@ function runStep(delay) {
         type: st.what,
         size: settings.size,
         speed: settings.speed,
-        side: settings.side,
+        // sides are picked as the spectator sees the screen: turned 180 degrees
+        side: settings.view === 'performer' ? settings.side
+          : ({ left: 'right', right: 'left', top: 'bottom', bottom: 'top' })[settings.side] || settings.side,
         palm: stage.palm,
         haptics: settings.haptics,
         finger: settings.fingerScratch === 'off' ? null : fingerOpts(settings.fingerScratch),

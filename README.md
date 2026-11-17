@@ -11,9 +11,12 @@ faint gear icon at the bottom right.
 ## The routine
 
 1. **Scan** – rear camera opens with a live hand-tracking skeleton (pure show).
-   Line the spectator's palm up with the dashed **framing guide** (finger bases
-   near the top, heel of the hand near the bottom, palm a little wider than the
-   screen) and press the shutter. The guide also shows, in amber, where the
+   Line the spectator's palm up with the dashed **framing guide** and press the
+   shutter. By default the guide is drawn from the spectator's side (*Orientation:
+   Spectator's view*): their fingers point toward you, finger bases near the
+   bottom of the screen, heel of the hand near the top, palm a little wider than
+   the screen. Creature entry sides (Left / Top…) are then also as the spectator
+   sees the screen. The guide also shows, in amber, where the
    screen finger will end up. Turn it off under *Framing guide on camera*.
 2. The photo now fills the screen with no UI. Place the phone on their palm.
 3. Run the **sequence** (Settings → Sequence). Default:
@@ -100,6 +103,9 @@ launches full screen without browser chrome, which matters for the trick
 (especially on iPhone, where Safari can't go full screen otherwise).
 
 Notes:
+- Android shows a "swipe to exit full screen" hint at the bottom for a few seconds
+  after going full screen; the camera buttons sit higher so it doesn't cover them.
+  Installed to the home screen, the app starts full screen and the hint never shows.
 - Wave detection uses the front camera; some phones show a camera-in-use dot.
   Switch to Tap or Timer mode if you'd rather avoid that.
 - Vibration footsteps work on Android only (iOS doesn't expose vibration to web apps).
