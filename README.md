@@ -16,7 +16,9 @@ faint gear icon at the bottom right.
    Spectator's view*): their fingers point toward you, finger bases near the
    bottom of the screen, heel of the hand near the top, palm a little wider than
    the screen. Creature entry sides (Left / Top…) are then also as the spectator
-   sees the screen. The guide also shows, in amber, where the
+   sees the screen.
+   The rear camera is always used; the light button (bottom right) toggles the
+   torch and starts off each time. The guide also shows, in amber, where the
    screen finger will end up. Turn it off under *Framing guide on camera*.
 2. The photo now fills the screen with no UI. Place the phone on their palm.
 3. Run the **sequence** (Settings → Sequence). Default:

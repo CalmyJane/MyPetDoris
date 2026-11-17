@@ -1,4 +1,4 @@
-import { Show, drawThumb, fingerPath, fingerWidth } from './stage.js';
+import { Show, drawThumb } from './stage.js';
 import { Hud, loadHandLandmarker, palmCenter } from './handtrack.js';
 import { WaveDetector } from './wave.js';
 import { CREATURES } from './creatures.js';
@@ -81,7 +81,7 @@ const SCHEMA = [
   { key: 'haptics', label: 'Footstep vibration', type: 'toggle' },
   { key: 'hud', label: 'Hand-tracking overlay', type: 'toggle' },
   { key: 'guide', label: 'Framing guide on camera', type: 'toggle',
-    note: () => 'Dashed outline of where the palm (and the screen finger) should sit, so the photo lines up with the real hand when the phone is laid on it.' },
+    note: () => 'Dashed outline of where the palm should sit, so the photo lines up with the real hand when the phone is laid on it.' },
 ];
 
 function buildSettings() {
@@ -363,7 +363,7 @@ function menuBackground() {
 // ---------------------------------------------------------------------------
 
 const cam = {
-  stream: null, facing: 'environment', raf: 0, hands: [], lastVideoTime: -1, dz: 1, torch: false, torchWanted: false,
+  stream: null, facing: 'environment', raf: 0, hands: [], lastVideoTime: -1, dz: 1, torch: false,
   landmarker: null, hud: null,
 };
 
@@ -463,7 +463,6 @@ function drawGuide() {
 
   // palm: wider than the screen at the sides, finger bases ~22% down, heel ~86%.
   // Spectator's view: turned 180 degrees (their fingers toward the photographer).
-  const m = Math.min(W, H);
   const flip = settings.view !== 'performer';
   ctx.save();
   if (flip) { ctx.translate(W, H); ctx.rotate(Math.PI); }
@@ -506,19 +505,6 @@ function drawGuide() {
   if (flip) label('FINGERS', W * 0.2, H - top - 34); else lab('FINGERS', top - 8, 0);
   lab('PALM', H * 0.55, 0);
   lab('WRIST', heel + H * 0.06, 0);
-
-  // where the screen finger will come in and stop
-  if (usesFinger(settings)) {
-    const p = fingerPath(W, H, settings.fingerEdge);
-    const T = [p.E[0] + p.d[0] * p.far, p.E[1] + p.d[1] * p.far];
-    glow('rgba(255,210,120,0.75)');
-    ctx.setLineDash([4, 6]);
-    finger(T, p.d, fingerWidth(W, H, settings.fingerSize), p.far + m);
-    ctx.save(); ctx.setLineDash([]); ctx.shadowBlur = 4; ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = 'rgba(255,210,120,0.9)';
-    ctx.textAlign = 'center'; ctx.fillText('FINGER', T[0] + p.d[0] * -60, T[1] + p.d[1] * -60 - 4);
-    ctx.restore();
-  }
 }
 
 let frontWarmed = false;
@@ -579,23 +565,26 @@ function setZoom(z) {
   applyZoom();
 }
 
+// Light: the button is always there and starts off each time the camera opens.
+// Some phones only report torch support a moment after the stream starts, so
+// we simply try it on tap and say so if this browser/phone can't.
 function setupTorch() {
-  const track = cam.stream?.getVideoTracks()[0];
-  let ok = false;
-  try { ok = !!track?.getCapabilities?.().torch; } catch {}
-  $('#btn-torch').hidden = !ok;
-  $('#torch-spacer').hidden = ok;
+  cam.torch = false;
   $('#btn-torch').classList.remove('on');
-  if (ok && cam.torchWanted) setTorch(true);
 }
 
 async function setTorch(on) {
   const track = cam.stream?.getVideoTracks()[0];
-  if (!track) return;
-  try {
-    await track.applyConstraints({ advanced: [{ torch: on }] });
-    cam.torch = on;
-  } catch (e) { console.warn('torch', e); }
+  let ok = false;
+  if (track) {
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on }] });
+      const st = track.getSettings?.() || {};
+      ok = st.torch === undefined ? !!track.getCapabilities?.().torch : st.torch === on;
+    } catch (e) { console.warn('torch', e); }
+  }
+  if (ok) cam.torch = on;
+  else if (on) { cam.note = 'NO LIGHT ON THIS PHONE'; cam.noteUntil = performance.now() + 1800; }
   $('#btn-torch').classList.toggle('on', cam.torch);
 }
 
@@ -859,7 +848,7 @@ $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings'
 $('#btn-preview').addEventListener('click', preview);
 $('#btn-cam-back').addEventListener('click', () => { closeCamera(); keepAwake(false); showScreen('menu'); });
 $('#btn-shutter').addEventListener('click', capture);
-$('#btn-torch').addEventListener('click', () => { cam.torchWanted = !cam.torch; setTorch(cam.torchWanted); });
+$('#btn-torch').addEventListener('click', () => setTorch(!cam.torch));
 $('#btn-zoom').addEventListener('click', () => {
   const i = ZOOM_STEPS.findIndex((z) => z > settings.zoom + 0.05);
   setZoom(ZOOM_STEPS[i < 0 ? 0 : i]);
@@ -890,10 +879,6 @@ $('#btn-fs').addEventListener('click', () => {
 });
 ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) => document.addEventListener(ev, updateFsButton));
 updateFsButton();
-$('#btn-flip').addEventListener('click', async () => {
-  cam.facing = cam.facing === 'environment' ? 'user' : 'environment';
-  try { await startStream(); } catch (e) { console.warn(e); }
-});
 $('#file-input').addEventListener('change', (e) => { const f = e.target.files?.[0]; if (f) loadFile(f); e.target.value = ''; });
 stageGestures();
 menuBackground();
