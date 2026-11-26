@@ -1,0 +1,62 @@
+# Uploads the app to https://calmyjane.com/mypetdoris/ (IONOS webspace, SFTP)
+# on every push to main. Only the files the app needs are sent; tools/,
+# README etc. stay in the repo.
+#
+# One-time setup, in GitHub: Settings > Secrets and variables > Actions:
+#   Secrets:   SFTP_HOST      e.g. access-xxxxxxxx.webspace-host.com (IONOS > Hosting > SFTP & SSH)
+#              SFTP_USER      the SFTP user name
+#              SFTP_PASSWORD  its password
+#   Variable (optional): SFTP_DIR, the folder on the webspace (default: mypetdoris)
+#
+# Nothing is ever deleted on the server; old files are simply overwritten.
+name: Deploy to calmyjane.com
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-calmyjane
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SFTP_HOST: ${{ secrets.SFTP_HOST }}
+      SFTP_USER: ${{ secrets.SFTP_USER }}
+      SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
+      SFTP_DIR: ${{ vars.SFTP_DIR || 'mypetdoris' }}
+    steps:
+      - name: Check setup
+        id: check
+        run: |
+          if [ -z "$SFTP_HOST" ] || [ -z "$SFTP_USER" ] || [ -z "$SFTP_PASSWORD" ]; then
+            echo "SFTP secrets not set yet; skipping upload."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+          case "$SFTP_DIR" in ""|"/"|"."|"./") echo "SFTP_DIR must be a subfolder"; exit 1;; esac
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != '1'
+
+      - name: Collect app files
+        if: steps.check.outputs.skip != '1'
+        run: |
+          mkdir -p out
+          cp -r index.html manifest.webmanifest sw.js css js icons assets out/
+
+      - name: Upload
+        if: steps.check.outputs.skip != '1'
+        run: |
+          sudo apt-get install -y -qq lftp > /dev/null
+          # password via env, so special characters in it can't break the command
+          export LFTP_PASSWORD="$SFTP_PASSWORD"
+          lftp -c "
+            set sftp:auto-confirm yes;
+            set net:max-retries 3;
+            open --env-password -u \"$SFTP_USER\" sftp://$SFTP_HOST;
+            mkdir -p -f \"$SFTP_DIR\";
+            mirror -R --verbose --parallel=4 out \"$SFTP_DIR\"
+          "
