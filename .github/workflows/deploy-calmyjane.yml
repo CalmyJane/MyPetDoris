@@ -72,10 +72,14 @@ jobs:
           fi
           dir="${FTP_DIR%/}/mypetdoris"
           export LFTP_PASSWORD="$FTP_PASSWORD"  # via env so special characters can't break the command
+          # rmdir below: an empty leftover MyPetDoris/ folder (old redirect) that the
+          # server's case correction would send /mypetdoris to. rmdir only removes
+          # an empty folder, so nothing can be lost.
           lftp -c "
             set sftp:auto-confirm yes;
             set net:max-retries 3;
             open --env-password -u \"$user\" -p $port sftp://$host;
             mkdir -p -f \"$dir\";
+            rmdir -f \"${FTP_DIR%/}/MyPetDoris\";
             mirror -R --verbose --parallel=4 out \"$dir\"
           "
