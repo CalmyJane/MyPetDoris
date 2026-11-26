@@ -100,12 +100,14 @@ Then open http://localhost:8080. Cameras only work on **HTTPS or localhost**, so
 use it on a phone, host the folder on any static HTTPS host and open it there.
 
 **Live at https://calmyjane.com/mypetdoris/**: every push to `main` uploads the
-app files to the `mypetdoris` folder on the calmyjane.com webspace (IONOS) via
-SFTP, see `.github/workflows/deploy-calmyjane.yml`. One-time setup in GitHub →
-Settings → Secrets and variables → Actions: secrets `SFTP_HOST`, `SFTP_USER`,
-`SFTP_PASSWORD` (IONOS → Hosting → SFTP & SSH). Until they're set the workflow
-skips the upload. It never deletes anything on the server. The GitHub Pages copy
-at https://calmyjane.github.io/MyPetDoris/ also keeps working.
+app files into `mypetdoris/` on the calmyjane.com webspace via SFTP
+(`.github/workflows/deploy-calmyjane.yml`). It needs the same four secrets as the
+`calmyjane-website` repo (`FTP_HOST`, `FTP_USER`, `FTP_PASSWORD`, `FTP_DIR`) under
+Settings → Secrets and variables → Actions; until they're set the upload is
+skipped. It never deletes anything on the server, and the website's own deploy
+treats `mypetdoris/` as foreign. The folder gets its own `.htaccess` that allows
+the camera (the website blocks it everywhere else). The GitHub Pages copy at
+https://calmyjane.github.io/MyPetDoris/ also keeps working.
 
 **Install it to the home screen** ("Add to Home Screen" / "Install app") – it then
 launches full screen without browser chrome, which matters for the trick

@@ -1,14 +1,14 @@
-# Uploads the app to https://calmyjane.com/mypetdoris/ (IONOS webspace, SFTP)
-# on every push to main. Only the files the app needs are sent; tools/,
-# README etc. stay in the repo.
+# Uploads the app to https://calmyjane.com/mypetdoris/ on every push to main.
+# Same webspace and same secrets as the calmyjane-website repo, whose own
+# deploy treats the mypetdoris/ folder as foreign (never touches it).
 #
-# One-time setup, in GitHub: Settings > Secrets and variables > Actions:
-#   Secrets:   SFTP_HOST      e.g. access-xxxxxxxx.webspace-host.com (IONOS > Hosting > SFTP & SSH)
-#              SFTP_USER      the SFTP user name
-#              SFTP_PASSWORD  its password
-#   Variable (optional): SFTP_DIR, the folder on the webspace (default: mypetdoris)
+# One-time setup: GitHub > this repo > Settings > Secrets and variables > Actions,
+# add the same four secrets the calmyjane-website repo has:
+#   FTP_HOST, FTP_USER, FTP_PASSWORD, FTP_DIR (the website root, e.g. /website)
+# FTP_HOST may also be a URL like sftp://user@host:22.
 #
-# Nothing is ever deleted on the server; old files are simply overwritten.
+# Only the app files are sent (tools/, README etc. stay in the repo), into
+# <FTP_DIR>/mypetdoris. Nothing is ever deleted on the server.
 name: Deploy to calmyjane.com
 
 on:
@@ -24,19 +24,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SFTP_HOST: ${{ secrets.SFTP_HOST }}
-      SFTP_USER: ${{ secrets.SFTP_USER }}
-      SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
-      SFTP_DIR: ${{ vars.SFTP_DIR || 'mypetdoris' }}
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+      FTP_DIR: ${{ secrets.FTP_DIR }}
+      FTP_PORT: ${{ secrets.FTP_PORT }}
     steps:
       - name: Check setup
         id: check
         run: |
-          if [ -z "$SFTP_HOST" ] || [ -z "$SFTP_USER" ] || [ -z "$SFTP_PASSWORD" ]; then
-            echo "SFTP secrets not set yet; skipping upload."
+          if [ -z "$FTP_HOST" ] || [ -z "$FTP_PASSWORD" ] || [ -z "$FTP_DIR" ]; then
+            echo "FTP secrets not set yet; skipping upload."
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
-          case "$SFTP_DIR" in ""|"/"|"."|"./") echo "SFTP_DIR must be a subfolder"; exit 1;; esac
 
       - uses: actions/checkout@v4
         if: steps.check.outputs.skip != '1'
@@ -46,17 +46,36 @@ jobs:
         run: |
           mkdir -p out
           cp -r index.html manifest.webmanifest sw.js css js icons assets out/
+          # The website's .htaccess sends "Permissions-Policy: camera=()" for the
+          # whole site, which would block the camera here. Allow it in this folder
+          # only, and never cache the service worker / HTML.
+          cat > out/.htaccess <<'EOF'
+          <IfModule mod_headers.c>
+            Header always unset Permissions-Policy
+            Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+            <FilesMatch "^(sw\.js|index\.html|manifest\.webmanifest)$">
+              Header set Cache-Control "no-cache"
+            </FilesMatch>
+          </IfModule>
+          AddType application/manifest+json .webmanifest
+          AddType image/webp .webp
+          EOF
 
       - name: Upload
         if: steps.check.outputs.skip != '1'
         run: |
           sudo apt-get install -y -qq lftp > /dev/null
-          # password via env, so special characters in it can't break the command
-          export LFTP_PASSWORD="$SFTP_PASSWORD"
+          host="$FTP_HOST"; user="$FTP_USER"; port="${FTP_PORT:-22}"
+          # accept sftp://user@host:port as well, like the website's deploy script
+          if [[ "$host" =~ ^s?ftps?://(([^@/]+)@)?([^:/]+)(:([0-9]+))? ]]; then
+            user="${user:-${BASH_REMATCH[2]}}"; host="${BASH_REMATCH[3]}"; port="${BASH_REMATCH[5]:-$port}"
+          fi
+          dir="${FTP_DIR%/}/mypetdoris"
+          export LFTP_PASSWORD="$FTP_PASSWORD"  # via env so special characters can't break the command
           lftp -c "
             set sftp:auto-confirm yes;
             set net:max-retries 3;
-            open --env-password -u \"$SFTP_USER\" sftp://$SFTP_HOST;
-            mkdir -p -f \"$SFTP_DIR\";
-            mirror -R --verbose --parallel=4 out \"$SFTP_DIR\"
+            open --env-password -u \"$user\" -p $port sftp://$host;
+            mkdir -p -f \"$dir\";
+            mirror -R --verbose --parallel=4 out \"$dir\"
           "
